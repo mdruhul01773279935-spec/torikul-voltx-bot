@@ -434,14 +434,14 @@ SERVICE_SMS_KEYWORDS = {
 }
 
 COUNTRY_CODES = {
-    "1": "US USA/Canada", "880": "BD Bangladesh", "91": "IN India", "44": "GB United Kingdom"
+    "1": "🇺🇸 USA/Canada", "880": "🇧🇩 Bangladesh", "91": "🇮🇳 India", "44": "🇬🇧 United Kingdom"
 }
 
 def get_country_info(range_str):
     clean_range = str(range_str or "").replace("X", "")
     for code, name in sorted(COUNTRY_CODES.items(), key=lambda x: len(x[0]), reverse=True):
         if clean_range.startswith(code): return code, name
-    return clean_range[:3], f"Other (+{clean_range[:3]})"
+    return clean_range[:3], f"🌍 Other (+{clean_range[:3]})"
 
 def detect_service(message_text, raw_sid=""):
     msg_lower = str(message_text).lower()
@@ -1062,31 +1062,34 @@ def get_live_traffic_content():
     if not hits_to_show:
         return header + "\n🕐 <b>Window:</b> Last 15 minutes\n<i>No traffic data available right now.</i>", markup
 
-    service_counts = {}
+    country_counts = {}
     for h in hits_to_show:
-        raw_sid = h.get("sid") or "Unknown"
-        raw_msg = h.get("message") or ""
-        detected_sid = detect_service(raw_msg, raw_sid)
-        app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
-        
-        if detected_sid not in service_counts: service_counts[detected_sid] = {"count": 0, "emoji_id": app_info["id"], "normal_emoji": app_info["emoji"]}
-        service_counts[detected_sid]["count"] += 1
+        raw_range = str(h.get("range", "")).replace("X", "")
+        if not raw_range:
+            continue
+        c_code, c_name = get_country_info(raw_range)
+        if c_code not in country_counts:
+            country_counts[c_code] = {"count": 0, "name": c_name}
+        country_counts[c_code]["count"] += 1
 
-    sorted_services = sorted(service_counts.items(), key=lambda item: item[1]["count"], reverse=True)[:6]
-    total_hits = sum(data["count"] for _, data in sorted_services) or 1
-    top_sid, top_data = sorted_services[0]
+    if not country_counts:
+        return header + "\n🕐 <b>Window:</b> Last 15 minutes\n<i>No traffic data available right now.</i>", markup
+
+    sorted_countries = sorted(country_counts.items(), key=lambda item: item[1]["count"], reverse=True)[:6]
+    total_hits = sum(data["count"] for _, data in sorted_countries) or 1
+    top_code, top_data = sorted_countries[0]
 
     msg = (
         f"{header}\n"
         f"🕐 <b>Window:</b> Last 15 minutes\n"
-        f"📬 <b>Top:</b> <tg-emoji emoji-id=\"{top_data['emoji_id']}\">{top_data['normal_emoji']}</tg-emoji> {html.escape(str(top_sid))}\n\n"
-        f"🌐 <b>Top Services:</b>\n"
+        f"📬 <b>Top:</b> {top_data['name']}\n\n"
+        f"🌐 <b>Top Countries:</b>\n"
     )
     
     rank_numbers = ["1.", "2.", "3.", "4.", "5.", "6."]
-    for i, (sid, data) in enumerate(sorted_services):
+    for i, (c_code, data) in enumerate(sorted_countries):
         percent = round((data["count"] / total_hits) * 100)
-        msg += f"{rank_numbers[i]} <tg-emoji emoji-id=\"{data['emoji_id']}\">{data['normal_emoji']}</tg-emoji> {html.escape(str(sid))} — {percent}%\n"
+        msg += f"{rank_numbers[i]} {data['name']} — {percent}%\n"
     return msg, markup
 
 def get_services_content():
