@@ -765,6 +765,8 @@ def init_sqlite():
     except sqlite3.OperationalError: pass
     try: cursor.execute("ALTER TABLE users ADD COLUMN total_otps INTEGER DEFAULT 0")
     except sqlite3.OperationalError: pass
+    try: cursor.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
+    except sqlite3.OperationalError: pass
     conn.commit()
     conn.close()
 
@@ -850,38 +852,74 @@ def get_user(user_id):
     else: 
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT first_name, balance, total_invites FROM users WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT first_name, balance, total_invites, username FROM users WHERE user_id = ?", (user_id,))
         row = cursor.fetchone()
         conn.close()
         if row: 
-            user_data = {"user_id": user_id, "first_name": row[0], "balance": row[1], "total_invites": row[2]}
+            user_data = {"user_id": user_id, "first_name": row[0], "balance": row[1], "total_invites": row[2], "username": row[3] or ""}
             user_cache[user_id] = user_data 
             return user_data
         return None
 
-def add_user(user_id, first_name="User"):
+def get_user_by_username(username):
+    """Look up a user by their @username (case-insensitive). Only works for users who have
+    interacted with the bot at least once, since Telegram doesn't let bots resolve arbitrary usernames."""
+    global current_db_mode, db_firebase, user_cache
+    clean_username = str(username or "").lstrip("@").strip().lower()
+    if not clean_username:
+        return None
+
+    for uid, data in user_cache.items():
+        if str(data.get("username", "")).lower() == clean_username:
+            return data
+
+    if current_db_mode == "firebase" and db_firebase:
+        docs = db_firebase.collection('users').where('username_lower', '==', clean_username).limit(1).stream()
+        for doc in docs:
+            user_data = doc.to_dict()
+            user_cache[user_data.get("user_id")] = user_data
+            return user_data
+        return None
+    else:
+        conn = sqlite3.connect("bot_database.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, first_name, balance, total_invites, username FROM users WHERE LOWER(username) = ?", (clean_username,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            user_data = {"user_id": row[0], "first_name": row[1], "balance": row[2], "total_invites": row[3], "username": row[4] or ""}
+            user_cache[row[0]] = user_data
+            return user_data
+        return None
+
+def add_user(user_id, first_name="User", username=""):
     global current_db_mode, db_firebase, user_cache
     add_to_broadcast_list(user_id) 
-    if user_id in user_cache and user_cache[user_id]["first_name"] == first_name: return 
+    clean_username = str(username or "").lstrip("@").strip()
+    if user_id in user_cache and user_cache[user_id]["first_name"] == first_name and user_cache[user_id].get("username", "") == clean_username: return 
     
     if current_db_mode == "firebase" and db_firebase:
         doc_ref = db_firebase.collection('users').document(str(user_id))
         if not doc_ref.get().exists:
-            new_data = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0}
+            new_data = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0, "username": clean_username, "username_lower": clean_username.lower()}
             doc_ref.set(new_data)
             user_cache[user_id] = new_data
         else: 
-            doc_ref.update({"first_name": first_name})
-            if user_id in user_cache: user_cache[user_id]["first_name"] = first_name
+            doc_ref.update({"first_name": first_name, "username": clean_username, "username_lower": clean_username.lower()})
+            if user_id in user_cache:
+                user_cache[user_id]["first_name"] = first_name
+                user_cache[user_id]["username"] = clean_username
     else: 
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO users (user_id, first_name, balance, total_invites) VALUES (?, ?, 0.0, 0)", (user_id, first_name))
-        cursor.execute("UPDATE users SET first_name = ? WHERE user_id = ?", (first_name, user_id))
+        cursor.execute("INSERT OR IGNORE INTO users (user_id, first_name, balance, total_invites, username) VALUES (?, ?, 0.0, 0, ?)", (user_id, first_name, clean_username))
+        cursor.execute("UPDATE users SET first_name = ?, username = ? WHERE user_id = ?", (first_name, clean_username, user_id))
         conn.commit()
         conn.close()
-        if user_id not in user_cache: user_cache[user_id] = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0}
-        else: user_cache[user_id]["first_name"] = first_name
+        if user_id not in user_cache: user_cache[user_id] = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0, "username": clean_username}
+        else:
+            user_cache[user_id]["first_name"] = first_name
+            user_cache[user_id]["username"] = clean_username
 
 def update_user_stats(user_id, balance_add, invite_add):
     global current_db_mode, db_firebase, user_cache
@@ -1274,6 +1312,7 @@ def handle_message(message):
     text = message.get("text", "")
     message_id = message["message_id"]
     first_name = message["from"].get("first_name", "User")
+    username = message["from"].get("username", "") or ""
 
     if text == "BACK" and user_id == ADMIN_ID:
         send_message(chat_id, "<b>Action Cancelled!</b>", reply_markup=get_main_keyboard(user_id)) 
@@ -1592,26 +1631,38 @@ def handle_message(message):
             return
             
         elif state == "waiting_uc_id":
-            try:
-                target_uid = int(text.strip())
-                target_data = get_user(target_uid)
-                
-                if target_data:
-                    safe_name = html.escape(str(target_data.get('first_name', 'User')))
-                    total_otps = target_data.get('total_otps', 0)
-                    msg = (
-                        f"<b>USER PROFILE</b>\n"
-                        f"<b>Name:</b> {safe_name}\n"
-                        f"<b>ID:</b> <code>{target_uid}</code>\n"
-                        f"<b>Balance:</b> {target_data.get('balance', 0):.2f} BDT\n"
-                        f"<b>Total OTPs:</b> {total_otps}\n"
-                        f"<b>Total Invites:</b> {target_data.get('total_invites', 0)}\n"
-                    )
-                    if target_msg_id: edit_message(chat_id, target_msg_id, msg, reply_markup=get_user_profile_keyboard(target_uid))
-                else:
-                    if target_msg_id: edit_message(chat_id, target_msg_id, "<b>User not found in database!</b>", reply_markup=get_user_control_keyboard())
-            except ValueError:
-                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid User ID format!</b>", reply_markup=get_user_control_keyboard())
+            lookup_input = text.strip()
+            target_uid = None
+            target_data = None
+            
+            if lookup_input.startswith("@") or not lookup_input.lstrip("-").isdigit():
+                target_data = get_user_by_username(lookup_input)
+                if target_data: target_uid = target_data.get("user_id")
+            else:
+                try:
+                    target_uid = int(lookup_input)
+                    target_data = get_user(target_uid)
+                except ValueError:
+                    target_data = None
+            
+            if target_data and target_uid is not None:
+                safe_name = html.escape(str(target_data.get('first_name', 'User')))
+                target_username = target_data.get('username', '')
+                username_line = f"<b>Username:</b> @{html.escape(target_username)}\n" if target_username else ""
+                total_otps = target_data.get('total_otps', 0)
+                msg = (
+                    f"<b>USER PROFILE</b>\n"
+                    f"<b>Name:</b> {safe_name}\n"
+                    f"{username_line}"
+                    f"<b>ID:</b> <code>{target_uid}</code>\n"
+                    f"<b>Balance:</b> {target_data.get('balance', 0):.2f} BDT\n"
+                    f"<b>Total OTPs:</b> {total_otps}\n"
+                    f"<b>Total Invites:</b> {target_data.get('total_invites', 0)}\n"
+                )
+                if target_msg_id: edit_message(chat_id, target_msg_id, msg, reply_markup=get_user_profile_keyboard(target_uid))
+            else:
+                not_found_msg = "<b>User not found in database!</b>\n<i>Note: a username only works if that user has messaged the bot at least once.</i>" if (lookup_input.startswith("@") or not lookup_input.lstrip("-").isdigit()) else "<b>User not found in database!</b>"
+                if target_msg_id: edit_message(chat_id, target_msg_id, not_found_msg, reply_markup=get_user_control_keyboard())
             del user_states[user_id]
             delete_message(chat_id, message_id)
             return
@@ -1640,7 +1691,7 @@ def handle_message(message):
 
     is_new_user = (get_user(user_id) is None)
 
-    add_user(user_id, first_name)
+    add_user(user_id, first_name, username)
     user_data = get_user(user_id)
 
     if text.startswith("/start"):
@@ -2014,7 +2065,7 @@ def handle_callback(callback_query):
         
     elif data == "uc_profile":
         user_states[user_id] = {"state": "waiting_uc_id", "msg_id": message_id}
-        edit_message(chat_id, message_id, "<b>Send the Telegram User ID to view profile:</b>", reply_markup=get_back_only_keyboard())
+        edit_message(chat_id, message_id, "<b>Send the Telegram User ID or @username to view profile:</b>", reply_markup=get_back_only_keyboard())
         answer_callback_query(query_id)
         
     elif data.startswith("uc_balance_"):
