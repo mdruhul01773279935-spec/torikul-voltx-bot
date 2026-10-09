@@ -980,6 +980,15 @@ def get_top_users(limit=5):
         conn.close()
         return rows
 
+def get_support_keyboard():
+    kb = {"inline_keyboard": []}
+    
+    link_display = bot_settings.get("support_link", "") or "Not Set"
+    if len(link_display) > 28: link_display = link_display[:28] + "..."
+    kb["inline_keyboard"].append([{"text": f"Link: {link_display}", "callback_data": "edit_support_link", "icon_custom_emoji_id": "5420517437885943844"}])
+    kb["inline_keyboard"].append([{"text": "BACK", "callback_data": "back_to_admin", "icon_custom_emoji_id": "5267490665117275176"}])
+    return kb
+
 def get_otp_group_keyboard():
     kb = {"inline_keyboard": []}
     
@@ -1052,7 +1061,8 @@ def get_main_keyboard(user_id):
             {"text": "💳 WALLET", "icon_custom_emoji_id": "5429105001655999635"}
         ],
         [
-            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"}
+            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"},
+            {"text": "🆘 SUPPORT", "icon_custom_emoji_id": "5429386648431405093"}
         ]
     ]
     if user_id == ADMIN_ID:
@@ -1075,6 +1085,7 @@ def get_admin_inline_keyboard():
                 {"text": "USER CONTROL", "callback_data": "user_control", "icon_custom_emoji_id": "5429274992166609833"}
             ],
             [{"text": "DXA CONTROL", "callback_data": "dxa_control", "icon_custom_emoji_id": "5240451569656308978"}],
+            [{"text": "SUPPORT ADMIN", "callback_data": "manage_support", "icon_custom_emoji_id": "5429386648431405093"}],
             [{"text": "UPLOAD FIREBASE", "callback_data": "upload_firebase", "icon_custom_emoji_id": "5429362935916962442"}],
             [{"text": db_status, "callback_data": "db_status", "icon_custom_emoji_id": "5429591316507963112"}],
             [{"text": "CLOSE", "callback_data": "close_panel", "icon_custom_emoji_id": "5438541186539232243"}]
@@ -1420,6 +1431,17 @@ def handle_message(message):
             delete_message(chat_id, message_id)
             return
 
+        elif state == "waiting_support_link":
+            if text.startswith("http"):
+                bot_settings["support_link"] = text.strip()
+                save_local_data()
+                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>SUPPORT ADMIN</b>\nSet the link users will see when they tap SUPPORT:", reply_markup=get_support_keyboard())
+            else:
+                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid URL format. Must start with http/https.</b>", reply_markup=get_back_only_keyboard())
+            del user_states[user_id]
+            delete_message(chat_id, message_id)
+            return
+
         elif state == "waiting_main_channel_link":
             if text.startswith("http"):
                 bot_settings["main_channel_link"] = text.strip()
@@ -1709,7 +1731,7 @@ def handle_message(message):
             delete_message(chat_id, message_id)
             return
 
-    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "👑 OWNER PANEL"]:
+    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "🆘 SUPPORT", "👑 OWNER PANEL"]:
         if user_id in user_states: del user_states[user_id]
 
     is_new_user = (get_user(user_id) is None)
@@ -1799,6 +1821,14 @@ def handle_message(message):
         
     elif text == "🏆 LEADERBOARD":
         send_message(chat_id, get_leaderboard_text(), reply_markup=get_leaderboard_keyboard())
+
+    elif text == "🆘 SUPPORT":
+        support_link = bot_settings.get("support_link", "")
+        if support_link:
+            kb = {"inline_keyboard": [[{"text": "Contact Support", "icon_custom_emoji_id": "5429386648431405093", "url": support_link}]]}
+            send_message(chat_id, "<b>Need help?</b>\nTap below to contact support:", reply_markup=kb)
+        else:
+            send_message(chat_id, "<b>Support is not configured yet.</b>\nPlease try again later.")
 
     elif text == "👑 OWNER PANEL":
         if user_id == ADMIN_ID:
@@ -1991,6 +2021,13 @@ def handle_callback(callback_query):
         edit_message(chat_id, message_id, "<b>FORCE JOIN SYSTEM</b>\nManage channels below:", reply_markup=get_force_join_keyboard())
         answer_callback_query(query_id, "Channel Deleted!")
 
+    elif data == "manage_support":
+        edit_message(chat_id, message_id, "<b>SUPPORT ADMIN</b>\nSet the link users will see when they tap SUPPORT (e.g. your @username or a support group/channel link):", reply_markup=get_support_keyboard())
+        answer_callback_query(query_id)
+    elif data == "edit_support_link":
+        user_states[user_id] = {"state": "waiting_support_link", "msg_id": message_id}
+        edit_message(chat_id, message_id, "<b>Please send the new Support link.</b>\n<i>Examples: https://t.me/your_username or https://t.me/your_support_group</i>", reply_markup=get_back_only_keyboard())
+        answer_callback_query(query_id)
     elif data == "manage_otp_group":
         edit_message(chat_id, message_id, "<b>OTP GROUP MANAGEMENT</b>\nManage settings below:", reply_markup=get_otp_group_keyboard())
         answer_callback_query(query_id)
