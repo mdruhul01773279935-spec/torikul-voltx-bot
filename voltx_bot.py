@@ -776,16 +776,23 @@ def migrate_sqlite_to_firebase():
     try:
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, balance, total_invites FROM users")
+        cursor.execute("SELECT user_id, first_name, balance, total_invites, total_otps, username FROM users")
         rows = cursor.fetchall()
         if not rows: return conn.close()
         
         count = 0
         batch = db_firebase.batch()
         for row in rows:
-            uid, fname, bal, inv = row
+            uid, fname, bal, inv, otps, uname = row
+            uname = uname or ""
             doc_ref = db_firebase.collection('users').document(str(uid))
-            batch.set(doc_ref, {"user_id": uid, "first_name": fname, "balance": firestore.Increment(bal), "total_invites": firestore.Increment(inv)}, merge=True)
+            batch.set(doc_ref, {
+                "user_id": uid, "first_name": fname,
+                "balance": firestore.Increment(bal or 0.0),
+                "total_invites": firestore.Increment(inv or 0),
+                "total_otps": firestore.Increment(otps or 0),
+                "username": uname, "username_lower": uname.lower()
+            }, merge=True)
             count += 1
             if count % 400 == 0:
                 batch.commit()
@@ -796,6 +803,7 @@ def migrate_sqlite_to_firebase():
         conn.close()
         user_cache.clear()
     except Exception as e: print(f"Migration Error: {e}")
+
 
 def init_firebase_from_file():
     global current_db_mode, db_firebase, bot_settings, force_join_status, force_join_channels, otp_forward_groups, otp_button_link, voltx_keys, voltx_auto_mode
