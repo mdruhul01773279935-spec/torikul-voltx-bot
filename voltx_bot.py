@@ -799,6 +799,21 @@ def migrate_sqlite_to_firebase():
 
 def init_firebase_from_file():
     global current_db_mode, db_firebase, bot_settings, force_join_status, force_join_channels, otp_forward_groups, otp_button_link, voltx_keys, voltx_auto_mode
+    
+    # On platforms with an ephemeral disk (e.g. Render free tier), the file written by the
+    # in-bot "UPLOAD FIREBASE" flow disappears on every restart/redeploy. If a FIREBASE_CREDENTIALS_JSON
+    # environment variable is set, recreate the file from it on startup so Firebase stays connected.
+    if not os.path.exists("temp_firebase.json"):
+        env_creds = os.environ.get("FIREBASE_CREDENTIALS_JSON", "").strip()
+        if env_creds:
+            try:
+                parsed = json.loads(env_creds)
+                with open("temp_firebase.json", "w") as f:
+                    json.dump(parsed, f)
+                print("Firebase credentials restored from FIREBASE_CREDENTIALS_JSON env var.")
+            except Exception as e:
+                print(f"Failed to parse FIREBASE_CREDENTIALS_JSON env var: {e}")
+    
     if os.path.exists("temp_firebase.json"):
         try:
             if not firebase_admin._apps: 
