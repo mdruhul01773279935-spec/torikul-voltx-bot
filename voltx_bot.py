@@ -1188,10 +1188,25 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
         
     req_count = bot_settings.get("num_req", 1)
     fetched_numbers = []
+    max_attempts_per_number = 5
     
     for _ in range(req_count):
-        selected_rid = random.choice(best_ranges)
-        num_data = fetch_live_number(selected_rid)
+        num_data = None
+        tried_ranges = []
+        attempt = 0
+        
+        while num_data is None and attempt < max_attempts_per_number:
+            # Prefer a range we haven't tried yet this round, fall back to a random one once exhausted
+            untried = [r for r in best_ranges if r not in tried_ranges]
+            selected_rid = random.choice(untried) if untried else random.choice(best_ranges)
+            tried_ranges.append(selected_rid)
+            
+            num_data = fetch_live_number(selected_rid)
+            attempt += 1
+            
+            if num_data is None and attempt < max_attempts_per_number:
+                time.sleep(0.6)  # brief pause before silently retrying another range
+        
         if num_data:
             full_number = html.escape(str(num_data.get("full_number", "")))
             country = html.escape(str(num_data.get("country", "Unknown")))
