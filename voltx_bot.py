@@ -1991,7 +1991,7 @@ def main():
     while True:
         try:
             url = BASE_URL + "getUpdates"
-            res = requests.get(url, params={"timeout": 30, "offset": offset}).json()
+            res = requests.get(url, params={"timeout": 30, "offset": offset}, timeout=40).json()
             if res.get("ok"):
                 for update in res["result"]:
                     offset = update["update_id"] + 1
