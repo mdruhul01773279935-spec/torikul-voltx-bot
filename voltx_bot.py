@@ -42,10 +42,10 @@ ADMIN_ID = 8001047777
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 BOT_USERNAME = ""
 
-# 2oo9 API Configuration
-API_2OO9_BASE = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-API_2OO9_KEY_DEFAULT = ""  # Intentionally blank for safe test deploy: Voltx-dependent
-                             # threads (console/sms listeners, /getnum) will fail harmlessly
+# Zebra SMS API Configuration
+API_ZEBRA_BASE = "https://api.zebrasms.com/api/v1/publicapi"
+API_ZEBRA_KEY_DEFAULT = ""  # Intentionally blank for safe test deploy: Zebra SMS-dependent
+                             # threads (traffic listener, /getnum) will fail harmlessly
                              # (401/empty responses swallowed by except:pass) so you can verify
                              # the core Telegram bot (menus, admin panel) works on Render
                              # without the OTP-interception pipeline doing anything real.
@@ -63,7 +63,7 @@ user_cooldowns = {}
 
 # Voltx Auto System States
 voltx_auto_mode = True 
-voltx_keys = [API_2OO9_KEY_DEFAULT]
+voltx_keys = [API_ZEBRA_KEY_DEFAULT]
 force_join_status = False
 force_join_channels = []
 
@@ -181,7 +181,7 @@ BOT_DATA_FILE = "bot_data.json"
 USERS_LIST_FILE = "users_list.json"
 
 def get_api_key():
-    return random.choice(voltx_keys) if voltx_keys else API_2OO9_KEY_DEFAULT
+    return random.choice(voltx_keys) if voltx_keys else API_ZEBRA_KEY_DEFAULT
 
 def get_otp_reward(service_name):
     rates = bot_settings.get("otp_service_rates", {})
@@ -206,7 +206,7 @@ def load_local_data():
                 loaded_keys = data.get("voltx_keys", [])
                 
                 if not loaded_keys:
-                    voltx_keys = [API_2OO9_KEY_DEFAULT]
+                    voltx_keys = [API_ZEBRA_KEY_DEFAULT]
                 else:
                     voltx_keys = loaded_keys
                     
@@ -543,71 +543,162 @@ def send_otp_to_groups(formatted_text, markup):
         
     return sent_any
 
-def fetch_live_access():
-    headers = {"mauthapi": get_api_key()}
+def fetch_live_access(sender=None):
+    """Lists services ('senders') with their available number ranges.
+    Called with no sender filter to get everything (for the Services menu),
+    or with a specific sender to get just that service's current ranges."""
+    headers = {"MAuth": get_api_key()}
+    params = {"sender": sender} if sender else {}
     try:
-        res = requests.get(f"{API_2OO9_BASE}/liveaccess", headers=headers, timeout=10)
+        res = requests.get(f"{API_ZEBRA_BASE}/liveaccess", headers=headers, params=params, timeout=10)
         data = res.json()
-        if data.get("meta", {}).get("code") == 200:
-            return data.get("data", {}).get("services", [])
+        if data.get("meta", {}).get("code") == 0:
+            rows = data.get("data", {}).get("rows", [])
+            return [{"sid": r.get("sender", "Unknown"), "ranges": r.get("ranges", [])} for r in rows]
     except: pass
     return []
 
+_liveaccess_cache = {}
+LIVEACCESS_CACHE_TTL = 55  # Zebra SMS itself caches liveaccess responses for 60s server-side
+
+def fetch_ranges_for_sender(sender):
+    """Returns the list of valid range patterns (e.g. '22501XXX') currently known for a sender,
+    with a short local cache so the traffic listener doesn't hammer /liveaccess every cycle."""
+    sender_key = str(sender or "").lower()
+    if not sender_key:
+        return []
+    now = time.time()
+    cached = _liveaccess_cache.get(sender_key)
+    if cached and (now - cached[0]) < LIVEACCESS_CACHE_TTL:
+        return cached[1]
+    services_data = fetch_live_access(sender=sender)
+    ranges = []
+    for s in services_data:
+        if str(s.get("sid", "")).lower() == sender_key:
+            ranges.extend(s.get("ranges", []))
+    _liveaccess_cache[sender_key] = (now, ranges)
+    return ranges
+
 def fetch_live_number(rid):
-    headers = {"mauthapi": get_api_key(), "Content-Type": "application/json"}
-    payload = {"rid": str(rid)}
+    headers = {"MAuth": get_api_key(), "Content-Type": "application/json"}
+    payload = {"range": str(rid)}
     try:
-        res = requests.post(f"{API_2OO9_BASE}/getnum", headers=headers, json=payload, timeout=10)
+        res = requests.post(f"{API_ZEBRA_BASE}/getnum", headers=headers, json=payload, timeout=10)
         data = res.json()
-        if data.get("meta", {}).get("code") == 200:
-            return data.get("data", {})
+        if data.get("meta", {}).get("code") == 0:
+            rows = data.get("data", {}).get("rows", [])
+            if rows:
+                row = rows[0]
+                return {
+                    "full_number": row.get("number", ""),
+                    "country": row.get("country", "Unknown"),
+                    "operator": row.get("operator", "Unknown"),
+                    "iso2": row.get("iso2", ""),
+                    "range": row.get("range", str(rid))
+                }
     except: pass
     return None
 
 def voltx_console_listener():
-    global recent_traffic, voltx_dynamic_data
+    """Unified Zebra SMS traffic listener: polls /getupdate once per cycle and handles
+    (1) Live Traffic stats + auto-mode range learning, and (2) delivering OTPs to the
+    renting user + forwarding to OTP groups -- all from the same fetched batch of rows."""
+    global recent_traffic, voltx_dynamic_data, recent_success_otps, otp_forward_groups, user_active_sessions, daily_user_otps
     cycle_count = 0
+    group_sent_otps = set()
     while True:
         try:
-            headers = {"mauthapi": get_api_key()}
-            res = requests.get(f"{API_2OO9_BASE}/console", headers=headers, timeout=10)
+            headers = {"MAuth": get_api_key()}
+            res = requests.get(f"{API_ZEBRA_BASE}/getupdate", headers=headers, timeout=10)
             data = res.json()
-            if data.get("meta", {}).get("code") == 200:
-                hits = data.get("data", {}).get("hits", [])
+            if data.get("meta", {}).get("code") == 0:
+                rows = data.get("data", {}).get("rows", [])
                 new_traffic, seen_signatures = [], set()
                 current_time = int(time.time())
-                
-                for h in hits:
-                    sig = f"{h.get('time', 0)}_{h.get('range', '')}"
-                    if sig not in seen_signatures:
-                        h['local_receive_time'] = current_time 
-                        new_traffic.append(h)
-                        seen_signatures.add(sig)
-                        
-                        raw_sid = h.get("sid") or "Unknown"
-                        raw_msg = h.get("message") or ""
-                        raw_range = str(h.get("range", "")).replace("X", "")
-                        
-                        if raw_range:
-                            detected_sid = detect_service(raw_msg, raw_sid)
-                            app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
-                            emoji_id, normal_emoji = app_info["id"], app_info["emoji"]
-                            
-                            if detected_sid not in voltx_dynamic_data:
-                                voltx_dynamic_data[detected_sid] = {"emoji_id": emoji_id, "normal_emoji": normal_emoji, "ranges": {}}
-                            if raw_range not in voltx_dynamic_data[detected_sid]["ranges"]:
-                                voltx_dynamic_data[detected_sid]["ranges"][raw_range] = {"last_seen": current_time, "hits": 0}
-                            voltx_dynamic_data[detected_sid]["ranges"][raw_range]["last_seen"] = current_time
-                            voltx_dynamic_data[detected_sid]["ranges"][raw_range]["hits"] += 1
+
+                for row in rows:
+                    raw_number = str(row.get("number", "")).lstrip("+")
+                    raw_sender = row.get("sender") or "Unknown"
+                    raw_msg = row.get("message") or ""
+                    at_ms = row.get("at_ms", 0)
+
+                    sig = f"{at_ms}_{raw_number}_{raw_msg}"
+                    if sig in seen_signatures:
+                        continue
+                    seen_signatures.add(sig)
+
+                    h = {"time": at_ms, "range": raw_number, "sid": raw_sender, "message": raw_msg, "local_receive_time": current_time}
+                    new_traffic.append(h)
+
+                    detected_sid = detect_service(raw_msg, raw_sender)
+
+                    # ---- Auto-mode range learning (for picking rentable ranges later) ----
+                    if raw_number:
+                        app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
+                        emoji_id, normal_emoji = app_info["id"], app_info["emoji"]
+
+                        matched_range = None
+                        for pattern in fetch_ranges_for_sender(raw_sender):
+                            clean_prefix = str(pattern).replace("X", "")
+                            if clean_prefix and raw_number.startswith(clean_prefix):
+                                if matched_range is None or len(clean_prefix) > len(str(matched_range).replace("X", "")):
+                                    matched_range = pattern
+                        if not matched_range:
+                            # Best-effort fallback if we couldn't match a known range pattern this cycle
+                            matched_range = (raw_number[:6] + "XXX") if len(raw_number) >= 6 else raw_number
+
+                        if detected_sid not in voltx_dynamic_data:
+                            voltx_dynamic_data[detected_sid] = {"emoji_id": emoji_id, "normal_emoji": normal_emoji, "ranges": {}}
+                        if matched_range not in voltx_dynamic_data[detected_sid]["ranges"]:
+                            voltx_dynamic_data[detected_sid]["ranges"][matched_range] = {"last_seen": current_time, "hits": 0}
+                        voltx_dynamic_data[detected_sid]["ranges"][matched_range]["last_seen"] = current_time
+                        voltx_dynamic_data[detected_sid]["ranges"][matched_range]["hits"] += 1
+
+                    # ---- Deliver OTP to the renting user + forward to OTP groups ----
+                    if raw_number and raw_msg:
+                        otp_sig = f"{raw_number}_{raw_msg}"
+
+                        if otp_sig not in group_sent_otps:
+                            group_sent_otps.add(otp_sig)
+                            if otp_forward_groups:
+                                formatted_message, markup = generate_otp_display(detected_sid, raw_number, raw_msg)
+                                send_otp_to_groups(formatted_message, markup)
+
+                        if otp_sig not in recent_success_otps:
+                            recent_success_otps.add(otp_sig)
+
+                            owner_id = None
+                            last_8_digits = raw_number[-8:] if len(raw_number) > 8 else raw_number
+                            for active_num, uid in list(user_active_sessions.items()):
+                                if active_num.lstrip('+').endswith(last_8_digits):
+                                    owner_id = uid
+                                    del user_active_sessions[active_num]
+                                    break
+
+                            if owner_id:
+                                reward = get_otp_reward(detected_sid)
+                                update_user_stats(owner_id, reward, 0)
+
+                                user_balance = get_user(owner_id).get("balance", 0.0)
+                                deliver_to_inbox(owner_id, detected_sid, raw_number, raw_msg, user_balance, reward)
+
+                                today_date = time.strftime("%Y-%m-%d")
+                                if daily_user_otps.get("date") != today_date:
+                                    daily_user_otps["date"] = today_date
+                                    daily_user_otps["users"] = {}
+                                uid_str = str(owner_id)
+                                daily_user_otps["users"][uid_str] = daily_user_otps["users"].get(uid_str, 0) + 1
+
+                            update_daily_stat("otps", 1)
 
                 fifteen_mins_ago = current_time - 900
                 for h in recent_traffic:
                     if h.get('local_receive_time', 0) >= fifteen_mins_ago:
-                        sig = f"{h.get('time', 0)}_{h.get('range', '')}"
+                        sig = f"{h.get('time', 0)}_{h.get('range', '')}_{h.get('message', '')}"
                         if sig not in seen_signatures:
                             new_traffic.append(h)
                             seen_signatures.add(sig)
-                        
+
                 new_traffic.sort(key=lambda x: x.get('local_receive_time', 0), reverse=True)
                 recent_traffic = new_traffic
 
@@ -623,88 +714,13 @@ def voltx_console_listener():
                 cycle_count += 1
                 if cycle_count % 3 == 0: save_local_data()
 
-        except Exception: pass
-        time.sleep(10)
+                if len(recent_success_otps) > 2000:
+                    recent_success_otps = set(list(recent_success_otps)[-1000:])
+                    save_local_data()
+                if len(group_sent_otps) > 2000:
+                    group_sent_otps = set(list(group_sent_otps)[-1000:])
 
-def voltx_sms_listener():
-    global recent_success_otps, otp_forward_groups, user_active_sessions
-    group_sent_otps = set() 
-    while True:
-        try:
-            headers = {"mauthapi": get_api_key(), "Content-Type": "application/json"}
-            res = requests.get(f"{API_2OO9_BASE}/success-otp", headers=headers, timeout=15)
-            
-            if res.status_code == 200:
-                data = res.json()
-                otps = []
-                
-                if isinstance(data, dict):
-                    if "data" in data and isinstance(data["data"], list): 
-                        otps = data["data"]
-                    elif "data" in data and isinstance(data["data"], dict):
-                        if "otps" in data["data"]: 
-                            otps = data["data"]["otps"]
-                        elif "hits" in data["data"]: 
-                            otps = data["data"]["hits"]
-                    elif "otps" in data: 
-                        otps = data["otps"]
-                    elif "hits" in data: 
-                        otps = data["hits"]
-                elif isinstance(data, list):
-                    otps = data
-                    
-                for otp_data in reversed(otps):
-                    msg_text = str(otp_data.get("message", otp_data.get("sms", otp_data.get("code", ""))))
-                    raw_number = str(otp_data.get("number", otp_data.get("phone", "")))
-                    raw_service = str(otp_data.get("sid", otp_data.get("service", "Unknown")))
-                    
-                    if not msg_text or not raw_number: continue
-                    
-                    sig = f"{raw_number}_{msg_text}"
-                    detected_service = detect_service(msg_text, raw_service)
-                    
-                    if sig not in group_sent_otps:
-                        group_sent_otps.add(sig)
-                        if otp_forward_groups:
-                            formatted_message, markup = generate_otp_display(detected_service, raw_number, msg_text)
-                            send_otp_to_groups(formatted_message, markup)
-                    
-                    if sig not in recent_success_otps:
-                        recent_success_otps.add(sig)
-                        
-                        owner_id = None
-                        last_8_digits = raw_number[-8:] if len(raw_number) > 8 else raw_number
-                        for active_num, uid in list(user_active_sessions.items()):
-                            if active_num.endswith(last_8_digits):
-                                owner_id = uid
-                                del user_active_sessions[active_num]
-                                break
-                                
-                        if owner_id:
-                            reward = get_otp_reward(detected_service)
-                            update_user_stats(owner_id, reward, 0)
-                            
-                            user_balance = get_user(owner_id).get("balance", 0.0)
-                            deliver_to_inbox(owner_id, detected_service, raw_number, msg_text, user_balance, reward)
-                            
-                            today_date = time.strftime("%Y-%m-%d")
-                            if daily_user_otps.get("date") != today_date:
-                                daily_user_otps["date"] = today_date
-                                daily_user_otps["users"] = {}
-                            uid_str = str(owner_id)
-                            daily_user_otps["users"][uid_str] = daily_user_otps["users"].get(uid_str, 0) + 1
-                        
-                        update_daily_stat("otps", 1)
-                        save_local_data()
-                        time.sleep(1) 
-                        
-            if len(recent_success_otps) > 2000:
-                recent_success_otps = set(list(recent_success_otps)[-1000:])
-                save_local_data()
-            if len(group_sent_otps) > 2000:
-                group_sent_otps = set(list(group_sent_otps)[-1000:])
-        except Exception:
-            pass
+        except Exception: pass
         time.sleep(10)
 
 def init_sqlite():
@@ -1125,13 +1141,13 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
                 for r in s.get('ranges', []):
                     clean_r = str(r).replace("X", "")
                     if c_code.startswith(clean_r) or clean_r.startswith(c_code):
-                        if clean_r not in target_ranges:
-                            target_ranges.append(clean_r)
+                        if r not in target_ranges:
+                            target_ranges.append(r)  # keep the full 'XXX'-style pattern Zebra SMS expects
                 break
         best_ranges = target_ranges[:3]
             
     if not best_ranges: 
-        best_ranges = [c_code]
+        best_ranges = [c_code + "XXX"]  # best-effort pattern guess in Zebra SMS's 'prefixXXX' range format
         
     req_count = bot_settings.get("num_req", 1)
     fetched_numbers = []
@@ -1981,7 +1997,6 @@ def main():
     set_bot_commands()
     
     threading.Thread(target=voltx_console_listener, daemon=True).start()
-    threading.Thread(target=voltx_sms_listener, daemon=True).start()
     threading.Thread(target=auto_cache_menu_thread, daemon=True).start()
     threading.Thread(target=run_health_check_server, daemon=True).start()
     
