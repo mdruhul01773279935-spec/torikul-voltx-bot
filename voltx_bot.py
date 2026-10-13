@@ -645,6 +645,29 @@ def fetch_ranges_for_sender(sender):
     _liveaccess_cache[sender_key] = (now, ranges)
     return ranges
 
+_all_ranges_cache = {"time": 0, "ranges": []}
+ALL_RANGES_CACHE_TTL = 55  # matches Zebra SMS's own ~60s server-side liveaccess cache
+
+def fetch_all_live_ranges():
+    """Returns the deduplicated set of ALL number ranges this account currently has access to,
+    across every sender/service combined. Used to show Live Traffic's country breakdown based
+    on real account coverage (which is stable and always populated), rather than only on
+    whatever happens to be sitting in the much smaller, often-stale /getupdate recent-events
+    buffer at the exact moment someone checks."""
+    now = time.time()
+    if _all_ranges_cache["ranges"] and (now - _all_ranges_cache["time"]) < ALL_RANGES_CACHE_TTL:
+        return _all_ranges_cache["ranges"]
+    services_data = fetch_live_access()
+    all_ranges = set()
+    for s in services_data:
+        for r in s.get("ranges", []):
+            all_ranges.add(r)
+    result = list(all_ranges)
+    _all_ranges_cache["ranges"] = result
+    _all_ranges_cache["time"] = now
+    return result
+
+
 def fetch_live_number(rid):
     headers = {"MAuth": get_api_key(), "Content-Type": "application/json"}
     payload = {"range": str(rid)}
@@ -1135,19 +1158,23 @@ def get_leaderboard_text():
     return "<b>Loading leaderboard, please wait...</b>"
 
 def get_live_traffic_content():
-    global recent_traffic
-    hits_to_show = recent_traffic
     markup = {"inline_keyboard": [[{"text": "🔄 Refresh", "callback_data": "refresh_traffic", "icon_custom_emoji_id": "5229111790842952353"}]]}
     
     header = "📊 <b>Live Traffic</b>\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-    
-    if not hits_to_show:
+
+    # Built from the account's full set of currently-available number ranges (across every
+    # sender/service combined) rather than only the small, often momentarily-stale recent-events
+    # buffer -- this gives a stable, always-populated multi-country breakdown reflecting real
+    # account coverage instead of whatever happened to be sitting in the buffer at this instant.
+    all_ranges = fetch_all_live_ranges()
+
+    if not all_ranges:
         return header + "\n🕐 <b>Window:</b> Last 15 minutes\n<i>No traffic data available right now.</i>", markup
 
     country_counts = {}
-    for h in hits_to_show:
-        raw_number = h.get("range") or ""
-        c_code, c_name_full = get_country_info(raw_number)
+    for rng in all_ranges:
+        clean_range = str(rng).replace("X", "")
+        c_code, c_name_full = get_country_info(clean_range)
         if "Other" in c_name_full:
             label = c_name_full  # already formatted like "Other (+225)"
         else:
