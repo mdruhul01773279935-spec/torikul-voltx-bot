@@ -1238,7 +1238,7 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
     target_ranges = []
     full_sid = sid_short
     
-    best_ranges = []
+    candidate_ranges = []
     if voltx_auto_mode:
         for sid, data in voltx_dynamic_data.items():
             if sid.lower().startswith(sid_short.lower()):
@@ -1248,12 +1248,12 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
                         target_ranges.append((r, r_data["hits"]))
                 break
         target_ranges.sort(key=lambda x: x[1], reverse=True)
-        best_ranges = [x[0] for x in target_ranges[:3]]
+        candidate_ranges = [x[0] for x in target_ranges]  # keep ALL matches (not just top 3) as retry candidates
 
     # Fall back to (or, when auto-mode is off, always use) the account's live range list --
     # self-learned data can stay thin/narrow for countries that just haven't had recent
     # observed traffic yet, even though the account genuinely has access to them.
-    if not best_ranges:
+    if not candidate_ranges:
         target_ranges = []
         services_data = fetch_live_access()
         for s in services_data:
@@ -1268,17 +1268,27 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
                     if c_code.startswith(clean_r) or clean_r.startswith(c_code):
                         if r not in target_ranges:
                             target_ranges.append(r)  # keep the full 'XXX'-style pattern Zebra SMS expects
-        best_ranges = target_ranges[:3]
+        candidate_ranges = target_ranges
             
-    if not best_ranges: 
-        best_ranges = [c_code + "XXX"]  # best-effort pattern guess in Zebra SMS's 'prefixXXX' range format
+    if not candidate_ranges: 
+        candidate_ranges = [c_code + "XXX"]  # best-effort pattern guess in Zebra SMS's 'prefixXXX' range format
         
     req_count = bot_settings.get("num_req", 1)
     fetched_numbers = []
-    
+    MAX_SILENT_RETRIES = 10  # how many different ranges to try per requested number before giving up on that slot
+
     for _ in range(req_count):
-        selected_rid = random.choice(best_ranges)
-        num_data = fetch_live_number(selected_rid)
+        # A given range can momentarily have "no numbers available on that range right now"
+        # (Zebra SMS returns this per-range, even though the country/service overall has plenty
+        # of other ranges). Silently try several different candidate ranges before surfacing any
+        # failure to the user -- they should only ever see a number, or "Out of stock" as a last resort.
+        attempts = candidate_ranges[:]
+        random.shuffle(attempts)
+        num_data = None
+        for attempt_rid in attempts[:MAX_SILENT_RETRIES]:
+            num_data = fetch_live_number(attempt_rid)
+            if num_data:
+                break
         if num_data:
             full_number = html.escape(str(num_data.get("full_number", "")))
             country = html.escape(str(num_data.get("country", "Unknown")))
@@ -1287,6 +1297,7 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
             
             if user_id and full_number:
                 user_active_sessions[str(full_number)] = user_id
+
     
     if fetched_numbers:
         update_daily_stat("numbers", len(fetched_numbers))
