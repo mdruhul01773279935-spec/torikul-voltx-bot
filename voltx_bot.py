@@ -42,10 +42,10 @@ ADMIN_ID = 8001047777
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 BOT_USERNAME = ""
 
-# Zebra SMS API Configuration
-API_ZEBRA_BASE = "https://api.zebrasms.com/api/v1/publicapi"
-API_ZEBRA_KEY_DEFAULT = ""  # Intentionally blank for safe test deploy: Zebra SMS-dependent
-                             # threads (traffic listener, /getnum) will fail harmlessly
+# 2oo9 API Configuration
+API_2OO9_BASE = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
+API_2OO9_KEY_DEFAULT = ""  # Intentionally blank for safe test deploy: Voltx-dependent
+                             # threads (console/sms listeners, /getnum) will fail harmlessly
                              # (401/empty responses swallowed by except:pass) so you can verify
                              # the core Telegram bot (menus, admin panel) works on Render
                              # without the OTP-interception pipeline doing anything real.
@@ -63,7 +63,7 @@ user_cooldowns = {}
 
 # Voltx Auto System States
 voltx_auto_mode = True 
-voltx_keys = [API_ZEBRA_KEY_DEFAULT]
+voltx_keys = [API_2OO9_KEY_DEFAULT]
 force_join_status = False
 force_join_channels = []
 
@@ -181,7 +181,7 @@ BOT_DATA_FILE = "bot_data.json"
 USERS_LIST_FILE = "users_list.json"
 
 def get_api_key():
-    return random.choice(voltx_keys) if voltx_keys else API_ZEBRA_KEY_DEFAULT
+    return random.choice(voltx_keys) if voltx_keys else API_2OO9_KEY_DEFAULT
 
 def get_otp_reward(service_name):
     rates = bot_settings.get("otp_service_rates", {})
@@ -206,7 +206,7 @@ def load_local_data():
                 loaded_keys = data.get("voltx_keys", [])
                 
                 if not loaded_keys:
-                    voltx_keys = [API_ZEBRA_KEY_DEFAULT]
+                    voltx_keys = [API_2OO9_KEY_DEFAULT]
                 else:
                     voltx_keys = loaded_keys
                     
@@ -434,64 +434,14 @@ SERVICE_SMS_KEYWORDS = {
 }
 
 COUNTRY_CODES = {
-    "1": "🇺🇸 USA/Canada", "7": "🇷🇺 Russia/Kazakhstan",
-    "20": "🇪🇬 Egypt", "27": "🇿🇦 South Africa",
-    "30": "🇬🇷 Greece", "31": "🇳🇱 Netherlands", "32": "🇧🇪 Belgium", "33": "🇫🇷 France",
-    "34": "🇪🇸 Spain", "36": "🇭🇺 Hungary", "39": "🇮🇹 Italy",
-    "40": "🇷🇴 Romania", "41": "🇨🇭 Switzerland", "43": "🇦🇹 Austria", "44": "🇬🇧 United Kingdom",
-    "45": "🇩🇰 Denmark", "46": "🇸🇪 Sweden", "47": "🇳🇴 Norway", "48": "🇵🇱 Poland", "49": "🇩🇪 Germany",
-    "51": "🇵🇪 Peru", "52": "🇲🇽 Mexico", "53": "🇨🇺 Cuba", "54": "🇦🇷 Argentina", "55": "🇧🇷 Brazil",
-    "56": "🇨🇱 Chile", "57": "🇨🇴 Colombia", "58": "🇻🇪 Venezuela",
-    "60": "🇲🇾 Malaysia", "61": "🇦🇺 Australia", "62": "🇮🇩 Indonesia", "63": "🇵🇭 Philippines",
-    "64": "🇳🇿 New Zealand", "65": "🇸🇬 Singapore", "66": "🇹🇭 Thailand",
-    "81": "🇯🇵 Japan", "82": "🇰🇷 South Korea", "84": "🇻🇳 Vietnam", "86": "🇨🇳 China",
-    "90": "🇹🇷 Turkey", "91": "🇮🇳 India", "92": "🇵🇰 Pakistan", "93": "🇦🇫 Afghanistan",
-    "94": "🇱🇰 Sri Lanka", "95": "🇲🇲 Myanmar", "98": "🇮🇷 Iran",
-    "211": "🇸🇸 South Sudan", "212": "🇲🇦 Morocco", "213": "🇩🇿 Algeria", "216": "🇹🇳 Tunisia",
-    "218": "🇱🇾 Libya", "220": "🇬🇲 Gambia", "221": "🇸🇳 Senegal", "222": "🇲🇷 Mauritania",
-    "223": "🇲🇱 Mali", "224": "🇬🇳 Guinea", "225": "🇨🇮 Ivory Coast", "226": "🇧🇫 Burkina Faso",
-    "227": "🇳🇪 Niger", "228": "🇹🇬 Togo", "229": "🇧🇯 Benin", "230": "🇲🇺 Mauritius",
-    "231": "🇱🇷 Liberia", "232": "🇸🇱 Sierra Leone", "233": "🇬🇭 Ghana", "234": "🇳🇬 Nigeria",
-    "235": "🇹🇩 Chad", "236": "🇨🇫 Central African Republic", "237": "🇨🇲 Cameroon", "238": "🇨🇻 Cape Verde",
-    "239": "🇸🇹 Sao Tome and Principe", "240": "🇬🇶 Equatorial Guinea", "241": "🇬🇦 Gabon",
-    "242": "🇨🇬 Republic of the Congo", "243": "🇨🇩 DR Congo", "244": "🇦🇴 Angola", "245": "🇬🇼 Guinea-Bissau",
-    "248": "🇸🇨 Seychelles", "249": "🇸🇩 Sudan", "250": "🇷🇼 Rwanda", "251": "🇪🇹 Ethiopia",
-    "252": "🇸🇴 Somalia", "253": "🇩🇯 Djibouti", "254": "🇰🇪 Kenya", "255": "🇹🇿 Tanzania",
-    "256": "🇺🇬 Uganda", "257": "🇧🇮 Burundi", "258": "🇲🇿 Mozambique", "260": "🇿🇲 Zambia",
-    "261": "🇲🇬 Madagascar", "262": "🇷🇪 Reunion/Mayotte", "263": "🇿🇼 Zimbabwe", "264": "🇳🇦 Namibia",
-    "265": "🇲🇼 Malawi", "266": "🇱🇸 Lesotho", "267": "🇧🇼 Botswana", "268": "🇸🇿 Eswatini",
-    "269": "🇰🇲 Comoros", "291": "🇪🇷 Eritrea", "297": "🇦🇼 Aruba", "298": "🇫🇴 Faroe Islands",
-    "299": "🇬🇱 Greenland", "350": "🇬🇮 Gibraltar", "351": "🇵🇹 Portugal", "352": "🇱🇺 Luxembourg",
-    "353": "🇮🇪 Ireland", "354": "🇮🇸 Iceland", "355": "🇦🇱 Albania", "356": "🇲🇹 Malta",
-    "357": "🇨🇾 Cyprus", "358": "🇫🇮 Finland", "359": "🇧🇬 Bulgaria", "370": "🇱🇹 Lithuania",
-    "371": "🇱🇻 Latvia", "372": "🇪🇪 Estonia", "373": "🇲🇩 Moldova", "374": "🇦🇲 Armenia",
-    "375": "🇧🇾 Belarus", "376": "🇦🇩 Andorra", "377": "🇲🇨 Monaco", "378": "🇸🇲 San Marino",
-    "380": "🇺🇦 Ukraine", "381": "🇷🇸 Serbia", "382": "🇲🇪 Montenegro", "383": "🇽🇰 Kosovo",
-    "385": "🇭🇷 Croatia", "386": "🇸🇮 Slovenia", "387": "🇧🇦 Bosnia and Herzegovina", "389": "🇲🇰 North Macedonia",
-    "420": "🇨🇿 Czech Republic", "421": "🇸🇰 Slovakia", "423": "🇱🇮 Liechtenstein",
-    "501": "🇧🇿 Belize", "502": "🇬🇹 Guatemala", "503": "🇸🇻 El Salvador", "504": "🇭🇳 Honduras",
-    "505": "🇳🇮 Nicaragua", "506": "🇨🇷 Costa Rica", "507": "🇵🇦 Panama", "509": "🇭🇹 Haiti",
-    "591": "🇧🇴 Bolivia", "592": "🇬🇾 Guyana", "593": "🇪🇨 Ecuador", "595": "🇵🇾 Paraguay",
-    "597": "🇸🇷 Suriname", "598": "🇺🇾 Uruguay",
-    "670": "🇹🇱 East Timor", "673": "🇧🇳 Brunei", "674": "🇳🇷 Nauru", "675": "🇵🇬 Papua New Guinea",
-    "676": "🇹🇴 Tonga", "677": "🇸🇧 Solomon Islands", "678": "🇻🇺 Vanuatu", "679": "🇫🇯 Fiji",
-    "680": "🇵🇼 Palau", "685": "🇼🇸 Samoa", "686": "🇰🇮 Kiribati", "688": "🇹🇻 Tuvalu",
-    "691": "🇫🇲 Micronesia", "692": "🇲🇭 Marshall Islands",
-    "850": "🇰🇵 North Korea", "852": "🇭🇰 Hong Kong", "853": "🇲🇴 Macau", "855": "🇰🇭 Cambodia",
-    "856": "🇱🇦 Laos", "880": "🇧🇩 Bangladesh", "886": "🇹🇼 Taiwan",
-    "960": "🇲🇻 Maldives", "961": "🇱🇧 Lebanon", "962": "🇯🇴 Jordan", "963": "🇸🇾 Syria",
-    "964": "🇮🇶 Iraq", "965": "🇰🇼 Kuwait", "966": "🇸🇦 Saudi Arabia", "967": "🇾🇪 Yemen",
-    "968": "🇴🇲 Oman", "970": "🇵🇸 Palestine", "971": "🇦🇪 United Arab Emirates", "972": "🇮🇱 Israel",
-    "973": "🇧🇭 Bahrain", "974": "🇶🇦 Qatar", "975": "🇧🇹 Bhutan", "976": "🇲🇳 Mongolia",
-    "977": "🇳🇵 Nepal", "992": "🇹🇯 Tajikistan", "993": "🇹🇲 Turkmenistan", "994": "🇦🇿 Azerbaijan",
-    "995": "🇬🇪 Georgia", "996": "🇰🇬 Kyrgyzstan", "998": "🇺🇿 Uzbekistan"
+    "1": "US USA/Canada", "880": "BD Bangladesh", "91": "IN India", "44": "GB United Kingdom"
 }
 
 def get_country_info(range_str):
     clean_range = str(range_str or "").replace("X", "")
     for code, name in sorted(COUNTRY_CODES.items(), key=lambda x: len(x[0]), reverse=True):
         if clean_range.startswith(code): return code, name
-    return clean_range[:3], f"🌍 Other (+{clean_range[:3]})"
+    return clean_range[:3], f"Other (+{clean_range[:3]})"
 
 def detect_service(message_text, raw_sid=""):
     msg_lower = str(message_text).lower()
@@ -593,162 +543,71 @@ def send_otp_to_groups(formatted_text, markup):
         
     return sent_any
 
-def fetch_live_access(sender=None):
-    """Lists services ('senders') with their available number ranges.
-    Called with no sender filter to get everything (for the Services menu),
-    or with a specific sender to get just that service's current ranges."""
-    headers = {"MAuth": get_api_key()}
-    params = {"sender": sender} if sender else {}
+def fetch_live_access():
+    headers = {"mauthapi": get_api_key()}
     try:
-        res = requests.get(f"{API_ZEBRA_BASE}/liveaccess", headers=headers, params=params, timeout=10)
+        res = requests.get(f"{API_2OO9_BASE}/liveaccess", headers=headers, timeout=10)
         data = res.json()
-        if data.get("meta", {}).get("code") == 0:
-            rows = data.get("data", {}).get("rows", [])
-            return [{"sid": r.get("sender", "Unknown"), "ranges": r.get("ranges", [])} for r in rows]
+        if data.get("meta", {}).get("code") == 200:
+            return data.get("data", {}).get("services", [])
     except: pass
     return []
 
-_liveaccess_cache = {}
-LIVEACCESS_CACHE_TTL = 55  # Zebra SMS itself caches liveaccess responses for 60s server-side
-
-def fetch_ranges_for_sender(sender):
-    """Returns the list of valid range patterns (e.g. '22501XXX') currently known for a sender,
-    with a short local cache so the traffic listener doesn't hammer /liveaccess every cycle."""
-    sender_key = str(sender or "").lower()
-    if not sender_key:
-        return []
-    now = time.time()
-    cached = _liveaccess_cache.get(sender_key)
-    if cached and (now - cached[0]) < LIVEACCESS_CACHE_TTL:
-        return cached[1]
-    services_data = fetch_live_access(sender=sender)
-    ranges = []
-    for s in services_data:
-        if str(s.get("sid", "")).lower() == sender_key:
-            ranges.extend(s.get("ranges", []))
-    _liveaccess_cache[sender_key] = (now, ranges)
-    return ranges
-
 def fetch_live_number(rid):
-    headers = {"MAuth": get_api_key(), "Content-Type": "application/json"}
-    payload = {"range": str(rid)}
+    headers = {"mauthapi": get_api_key(), "Content-Type": "application/json"}
+    payload = {"rid": str(rid)}
     try:
-        res = requests.post(f"{API_ZEBRA_BASE}/getnum", headers=headers, json=payload, timeout=10)
+        res = requests.post(f"{API_2OO9_BASE}/getnum", headers=headers, json=payload, timeout=10)
         data = res.json()
-        if data.get("meta", {}).get("code") == 0:
-            rows = data.get("data", {}).get("rows", [])
-            if rows:
-                row = rows[0]
-                return {
-                    "full_number": row.get("number", ""),
-                    "country": row.get("country", "Unknown"),
-                    "operator": row.get("operator", "Unknown"),
-                    "iso2": row.get("iso2", ""),
-                    "range": row.get("range", str(rid))
-                }
+        if data.get("meta", {}).get("code") == 200:
+            return data.get("data", {})
     except: pass
     return None
 
 def voltx_console_listener():
-    """Unified Zebra SMS traffic listener: polls /getupdate once per cycle and handles
-    (1) Live Traffic stats + auto-mode range learning, and (2) delivering OTPs to the
-    renting user + forwarding to OTP groups -- all from the same fetched batch of rows."""
-    global recent_traffic, voltx_dynamic_data, recent_success_otps, otp_forward_groups, user_active_sessions, daily_user_otps
+    global recent_traffic, voltx_dynamic_data
     cycle_count = 0
-    group_sent_otps = set()
     while True:
         try:
-            headers = {"MAuth": get_api_key()}
-            res = requests.get(f"{API_ZEBRA_BASE}/getupdate", headers=headers, timeout=10)
+            headers = {"mauthapi": get_api_key()}
+            res = requests.get(f"{API_2OO9_BASE}/console", headers=headers, timeout=10)
             data = res.json()
-            if data.get("meta", {}).get("code") == 0:
-                rows = data.get("data", {}).get("rows", [])
+            if data.get("meta", {}).get("code") == 200:
+                hits = data.get("data", {}).get("hits", [])
                 new_traffic, seen_signatures = [], set()
                 current_time = int(time.time())
-
-                for row in rows:
-                    raw_number = str(row.get("number", "")).lstrip("+")
-                    raw_sender = row.get("sender") or "Unknown"
-                    raw_msg = row.get("message") or ""
-                    at_ms = row.get("at_ms", 0)
-
-                    sig = f"{at_ms}_{raw_number}_{raw_msg}"
-                    if sig in seen_signatures:
-                        continue
-                    seen_signatures.add(sig)
-
-                    h = {"time": at_ms, "range": raw_number, "sid": raw_sender, "message": raw_msg, "local_receive_time": current_time}
-                    new_traffic.append(h)
-
-                    detected_sid = detect_service(raw_msg, raw_sender)
-
-                    # ---- Auto-mode range learning (for picking rentable ranges later) ----
-                    if raw_number:
-                        app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
-                        emoji_id, normal_emoji = app_info["id"], app_info["emoji"]
-
-                        matched_range = None
-                        for pattern in fetch_ranges_for_sender(raw_sender):
-                            clean_prefix = str(pattern).replace("X", "")
-                            if clean_prefix and raw_number.startswith(clean_prefix):
-                                if matched_range is None or len(clean_prefix) > len(str(matched_range).replace("X", "")):
-                                    matched_range = pattern
-                        if not matched_range:
-                            # Best-effort fallback if we couldn't match a known range pattern this cycle
-                            matched_range = (raw_number[:6] + "XXX") if len(raw_number) >= 6 else raw_number
-
-                        if detected_sid not in voltx_dynamic_data:
-                            voltx_dynamic_data[detected_sid] = {"emoji_id": emoji_id, "normal_emoji": normal_emoji, "ranges": {}}
-                        if matched_range not in voltx_dynamic_data[detected_sid]["ranges"]:
-                            voltx_dynamic_data[detected_sid]["ranges"][matched_range] = {"last_seen": current_time, "hits": 0}
-                        voltx_dynamic_data[detected_sid]["ranges"][matched_range]["last_seen"] = current_time
-                        voltx_dynamic_data[detected_sid]["ranges"][matched_range]["hits"] += 1
-
-                    # ---- Deliver OTP to the renting user + forward to OTP groups ----
-                    if raw_number and raw_msg:
-                        otp_sig = f"{raw_number}_{raw_msg}"
-
-                        if otp_sig not in group_sent_otps:
-                            group_sent_otps.add(otp_sig)
-                            if otp_forward_groups:
-                                formatted_message, markup = generate_otp_display(detected_sid, raw_number, raw_msg)
-                                send_otp_to_groups(formatted_message, markup)
-
-                        if otp_sig not in recent_success_otps:
-                            recent_success_otps.add(otp_sig)
-
-                            owner_id = None
-                            last_8_digits = raw_number[-8:] if len(raw_number) > 8 else raw_number
-                            for active_num, uid in list(user_active_sessions.items()):
-                                if active_num.lstrip('+').endswith(last_8_digits):
-                                    owner_id = uid
-                                    del user_active_sessions[active_num]
-                                    break
-
-                            if owner_id:
-                                reward = get_otp_reward(detected_sid)
-                                update_user_stats(owner_id, reward, 0)
-
-                                user_balance = get_user(owner_id).get("balance", 0.0)
-                                deliver_to_inbox(owner_id, detected_sid, raw_number, raw_msg, user_balance, reward)
-
-                                today_date = time.strftime("%Y-%m-%d")
-                                if daily_user_otps.get("date") != today_date:
-                                    daily_user_otps["date"] = today_date
-                                    daily_user_otps["users"] = {}
-                                uid_str = str(owner_id)
-                                daily_user_otps["users"][uid_str] = daily_user_otps["users"].get(uid_str, 0) + 1
-
-                            update_daily_stat("otps", 1)
+                
+                for h in hits:
+                    sig = f"{h.get('time', 0)}_{h.get('range', '')}"
+                    if sig not in seen_signatures:
+                        h['local_receive_time'] = current_time 
+                        new_traffic.append(h)
+                        seen_signatures.add(sig)
+                        
+                        raw_sid = h.get("sid") or "Unknown"
+                        raw_msg = h.get("message") or ""
+                        raw_range = str(h.get("range", "")).replace("X", "")
+                        
+                        if raw_range:
+                            detected_sid = detect_service(raw_msg, raw_sid)
+                            app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
+                            emoji_id, normal_emoji = app_info["id"], app_info["emoji"]
+                            
+                            if detected_sid not in voltx_dynamic_data:
+                                voltx_dynamic_data[detected_sid] = {"emoji_id": emoji_id, "normal_emoji": normal_emoji, "ranges": {}}
+                            if raw_range not in voltx_dynamic_data[detected_sid]["ranges"]:
+                                voltx_dynamic_data[detected_sid]["ranges"][raw_range] = {"last_seen": current_time, "hits": 0}
+                            voltx_dynamic_data[detected_sid]["ranges"][raw_range]["last_seen"] = current_time
+                            voltx_dynamic_data[detected_sid]["ranges"][raw_range]["hits"] += 1
 
                 fifteen_mins_ago = current_time - 900
                 for h in recent_traffic:
                     if h.get('local_receive_time', 0) >= fifteen_mins_ago:
-                        sig = f"{h.get('time', 0)}_{h.get('range', '')}_{h.get('message', '')}"
+                        sig = f"{h.get('time', 0)}_{h.get('range', '')}"
                         if sig not in seen_signatures:
                             new_traffic.append(h)
                             seen_signatures.add(sig)
-
+                        
                 new_traffic.sort(key=lambda x: x.get('local_receive_time', 0), reverse=True)
                 recent_traffic = new_traffic
 
@@ -764,13 +623,88 @@ def voltx_console_listener():
                 cycle_count += 1
                 if cycle_count % 3 == 0: save_local_data()
 
-                if len(recent_success_otps) > 2000:
-                    recent_success_otps = set(list(recent_success_otps)[-1000:])
-                    save_local_data()
-                if len(group_sent_otps) > 2000:
-                    group_sent_otps = set(list(group_sent_otps)[-1000:])
-
         except Exception: pass
+        time.sleep(10)
+
+def voltx_sms_listener():
+    global recent_success_otps, otp_forward_groups, user_active_sessions
+    group_sent_otps = set() 
+    while True:
+        try:
+            headers = {"mauthapi": get_api_key(), "Content-Type": "application/json"}
+            res = requests.get(f"{API_2OO9_BASE}/success-otp", headers=headers, timeout=15)
+            
+            if res.status_code == 200:
+                data = res.json()
+                otps = []
+                
+                if isinstance(data, dict):
+                    if "data" in data and isinstance(data["data"], list): 
+                        otps = data["data"]
+                    elif "data" in data and isinstance(data["data"], dict):
+                        if "otps" in data["data"]: 
+                            otps = data["data"]["otps"]
+                        elif "hits" in data["data"]: 
+                            otps = data["data"]["hits"]
+                    elif "otps" in data: 
+                        otps = data["otps"]
+                    elif "hits" in data: 
+                        otps = data["hits"]
+                elif isinstance(data, list):
+                    otps = data
+                    
+                for otp_data in reversed(otps):
+                    msg_text = str(otp_data.get("message", otp_data.get("sms", otp_data.get("code", ""))))
+                    raw_number = str(otp_data.get("number", otp_data.get("phone", "")))
+                    raw_service = str(otp_data.get("sid", otp_data.get("service", "Unknown")))
+                    
+                    if not msg_text or not raw_number: continue
+                    
+                    sig = f"{raw_number}_{msg_text}"
+                    detected_service = detect_service(msg_text, raw_service)
+                    
+                    if sig not in group_sent_otps:
+                        group_sent_otps.add(sig)
+                        if otp_forward_groups:
+                            formatted_message, markup = generate_otp_display(detected_service, raw_number, msg_text)
+                            send_otp_to_groups(formatted_message, markup)
+                    
+                    if sig not in recent_success_otps:
+                        recent_success_otps.add(sig)
+                        
+                        owner_id = None
+                        last_8_digits = raw_number[-8:] if len(raw_number) > 8 else raw_number
+                        for active_num, uid in list(user_active_sessions.items()):
+                            if active_num.endswith(last_8_digits):
+                                owner_id = uid
+                                del user_active_sessions[active_num]
+                                break
+                                
+                        if owner_id:
+                            reward = get_otp_reward(detected_service)
+                            update_user_stats(owner_id, reward, 0)
+                            
+                            user_balance = get_user(owner_id).get("balance", 0.0)
+                            deliver_to_inbox(owner_id, detected_service, raw_number, msg_text, user_balance, reward)
+                            
+                            today_date = time.strftime("%Y-%m-%d")
+                            if daily_user_otps.get("date") != today_date:
+                                daily_user_otps["date"] = today_date
+                                daily_user_otps["users"] = {}
+                            uid_str = str(owner_id)
+                            daily_user_otps["users"][uid_str] = daily_user_otps["users"].get(uid_str, 0) + 1
+                        
+                        update_daily_stat("otps", 1)
+                        save_local_data()
+                        time.sleep(1) 
+                        
+            if len(recent_success_otps) > 2000:
+                recent_success_otps = set(list(recent_success_otps)[-1000:])
+                save_local_data()
+            if len(group_sent_otps) > 2000:
+                group_sent_otps = set(list(group_sent_otps)[-1000:])
+        except Exception:
+            pass
         time.sleep(10)
 
 def init_sqlite():
@@ -781,8 +715,6 @@ def init_sqlite():
     except sqlite3.OperationalError: pass
     try: cursor.execute("ALTER TABLE users ADD COLUMN total_otps INTEGER DEFAULT 0")
     except sqlite3.OperationalError: pass
-    try: cursor.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
-    except sqlite3.OperationalError: pass
     conn.commit()
     conn.close()
 
@@ -792,23 +724,16 @@ def migrate_sqlite_to_firebase():
     try:
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, balance, total_invites, total_otps, username FROM users")
+        cursor.execute("SELECT user_id, first_name, balance, total_invites FROM users")
         rows = cursor.fetchall()
         if not rows: return conn.close()
         
         count = 0
         batch = db_firebase.batch()
         for row in rows:
-            uid, fname, bal, inv, otps, uname = row
-            uname = uname or ""
+            uid, fname, bal, inv = row
             doc_ref = db_firebase.collection('users').document(str(uid))
-            batch.set(doc_ref, {
-                "user_id": uid, "first_name": fname,
-                "balance": firestore.Increment(bal or 0.0),
-                "total_invites": firestore.Increment(inv or 0),
-                "total_otps": firestore.Increment(otps or 0),
-                "username": uname, "username_lower": uname.lower()
-            }, merge=True)
+            batch.set(doc_ref, {"user_id": uid, "first_name": fname, "balance": firestore.Increment(bal), "total_invites": firestore.Increment(inv)}, merge=True)
             count += 1
             if count % 400 == 0:
                 batch.commit()
@@ -820,24 +745,8 @@ def migrate_sqlite_to_firebase():
         user_cache.clear()
     except Exception as e: print(f"Migration Error: {e}")
 
-
 def init_firebase_from_file():
     global current_db_mode, db_firebase, bot_settings, force_join_status, force_join_channels, otp_forward_groups, otp_button_link, voltx_keys, voltx_auto_mode
-    
-    # On platforms with an ephemeral disk (e.g. Render free tier), the file written by the
-    # in-bot "UPLOAD FIREBASE" flow disappears on every restart/redeploy. If a FIREBASE_CREDENTIALS_JSON
-    # environment variable is set, recreate the file from it on startup so Firebase stays connected.
-    if not os.path.exists("temp_firebase.json"):
-        env_creds = os.environ.get("FIREBASE_CREDENTIALS_JSON", "").strip()
-        if env_creds:
-            try:
-                parsed = json.loads(env_creds)
-                with open("temp_firebase.json", "w") as f:
-                    json.dump(parsed, f)
-                print("Firebase credentials restored from FIREBASE_CREDENTIALS_JSON env var.")
-            except Exception as e:
-                print(f"Failed to parse FIREBASE_CREDENTIALS_JSON env var: {e}")
-    
     if os.path.exists("temp_firebase.json"):
         try:
             if not firebase_admin._apps: 
@@ -891,74 +800,38 @@ def get_user(user_id):
     else: 
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT first_name, balance, total_invites, username FROM users WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT first_name, balance, total_invites FROM users WHERE user_id = ?", (user_id,))
         row = cursor.fetchone()
         conn.close()
         if row: 
-            user_data = {"user_id": user_id, "first_name": row[0], "balance": row[1], "total_invites": row[2], "username": row[3] or ""}
+            user_data = {"user_id": user_id, "first_name": row[0], "balance": row[1], "total_invites": row[2]}
             user_cache[user_id] = user_data 
             return user_data
         return None
 
-def get_user_by_username(username):
-    """Look up a user by their @username (case-insensitive). Only works for users who have
-    interacted with the bot at least once, since Telegram doesn't let bots resolve arbitrary usernames."""
-    global current_db_mode, db_firebase, user_cache
-    clean_username = str(username or "").lstrip("@").strip().lower()
-    if not clean_username:
-        return None
-
-    for uid, data in user_cache.items():
-        if str(data.get("username", "")).lower() == clean_username:
-            return data
-
-    if current_db_mode == "firebase" and db_firebase:
-        docs = db_firebase.collection('users').where('username_lower', '==', clean_username).limit(1).stream()
-        for doc in docs:
-            user_data = doc.to_dict()
-            user_cache[user_data.get("user_id")] = user_data
-            return user_data
-        return None
-    else:
-        conn = sqlite3.connect("bot_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, balance, total_invites, username FROM users WHERE LOWER(username) = ?", (clean_username,))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            user_data = {"user_id": row[0], "first_name": row[1], "balance": row[2], "total_invites": row[3], "username": row[4] or ""}
-            user_cache[row[0]] = user_data
-            return user_data
-        return None
-
-def add_user(user_id, first_name="User", username=""):
+def add_user(user_id, first_name="User"):
     global current_db_mode, db_firebase, user_cache
     add_to_broadcast_list(user_id) 
-    clean_username = str(username or "").lstrip("@").strip()
-    if user_id in user_cache and user_cache[user_id]["first_name"] == first_name and user_cache[user_id].get("username", "") == clean_username: return 
+    if user_id in user_cache and user_cache[user_id]["first_name"] == first_name: return 
     
     if current_db_mode == "firebase" and db_firebase:
         doc_ref = db_firebase.collection('users').document(str(user_id))
         if not doc_ref.get().exists:
-            new_data = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0, "username": clean_username, "username_lower": clean_username.lower()}
+            new_data = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0}
             doc_ref.set(new_data)
             user_cache[user_id] = new_data
         else: 
-            doc_ref.update({"first_name": first_name, "username": clean_username, "username_lower": clean_username.lower()})
-            if user_id in user_cache:
-                user_cache[user_id]["first_name"] = first_name
-                user_cache[user_id]["username"] = clean_username
+            doc_ref.update({"first_name": first_name})
+            if user_id in user_cache: user_cache[user_id]["first_name"] = first_name
     else: 
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO users (user_id, first_name, balance, total_invites, username) VALUES (?, ?, 0.0, 0, ?)", (user_id, first_name, clean_username))
-        cursor.execute("UPDATE users SET first_name = ?, username = ? WHERE user_id = ?", (first_name, clean_username, user_id))
+        cursor.execute("INSERT OR IGNORE INTO users (user_id, first_name, balance, total_invites) VALUES (?, ?, 0.0, 0)", (user_id, first_name))
+        cursor.execute("UPDATE users SET first_name = ? WHERE user_id = ?", (first_name, user_id))
         conn.commit()
         conn.close()
-        if user_id not in user_cache: user_cache[user_id] = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0, "username": clean_username}
-        else:
-            user_cache[user_id]["first_name"] = first_name
-            user_cache[user_id]["username"] = clean_username
+        if user_id not in user_cache: user_cache[user_id] = {"user_id": user_id, "first_name": first_name, "balance": 0.0, "total_invites": 0}
+        else: user_cache[user_id]["first_name"] = first_name
 
 def update_user_stats(user_id, balance_add, invite_add):
     global current_db_mode, db_firebase, user_cache
@@ -995,15 +868,6 @@ def get_top_users(limit=5):
         rows = cursor.fetchall()
         conn.close()
         return rows
-
-def get_support_keyboard():
-    kb = {"inline_keyboard": []}
-    
-    link_display = bot_settings.get("support_link", "") or "Not Set"
-    if len(link_display) > 28: link_display = link_display[:28] + "..."
-    kb["inline_keyboard"].append([{"text": f"Link: {link_display}", "callback_data": "edit_support_link", "icon_custom_emoji_id": "5420517437885943844"}])
-    kb["inline_keyboard"].append([{"text": "BACK", "callback_data": "back_to_admin", "icon_custom_emoji_id": "5267490665117275176"}])
-    return kb
 
 def get_otp_group_keyboard():
     kb = {"inline_keyboard": []}
@@ -1077,8 +941,7 @@ def get_main_keyboard(user_id):
             {"text": "💳 WALLET", "icon_custom_emoji_id": "5429105001655999635"}
         ],
         [
-            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"},
-            {"text": "🆘 SUPPORT", "icon_custom_emoji_id": "5429386648431405093"}
+            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"}
         ]
     ]
     if user_id == ADMIN_ID:
@@ -1101,7 +964,6 @@ def get_admin_inline_keyboard():
                 {"text": "USER CONTROL", "callback_data": "user_control", "icon_custom_emoji_id": "5429274992166609833"}
             ],
             [{"text": "DXA CONTROL", "callback_data": "dxa_control", "icon_custom_emoji_id": "5240451569656308978"}],
-            [{"text": "SUPPORT ADMIN", "callback_data": "manage_support", "icon_custom_emoji_id": "5429386648431405093"}],
             [{"text": "UPLOAD FIREBASE", "callback_data": "upload_firebase", "icon_custom_emoji_id": "5429362935916962442"}],
             [{"text": db_status, "callback_data": "db_status", "icon_custom_emoji_id": "5429591316507963112"}],
             [{"text": "CLOSE", "callback_data": "close_panel", "icon_custom_emoji_id": "5438541186539232243"}]
@@ -1200,34 +1062,31 @@ def get_live_traffic_content():
     if not hits_to_show:
         return header + "\n🕐 <b>Window:</b> Last 15 minutes\n<i>No traffic data available right now.</i>", markup
 
-    country_counts = {}
+    service_counts = {}
     for h in hits_to_show:
-        raw_range = str(h.get("range", "")).replace("X", "")
-        if not raw_range:
-            continue
-        c_code, c_name = get_country_info(raw_range)
-        if c_code not in country_counts:
-            country_counts[c_code] = {"count": 0, "name": c_name}
-        country_counts[c_code]["count"] += 1
+        raw_sid = h.get("sid") or "Unknown"
+        raw_msg = h.get("message") or ""
+        detected_sid = detect_service(raw_msg, raw_sid)
+        app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
+        
+        if detected_sid not in service_counts: service_counts[detected_sid] = {"count": 0, "emoji_id": app_info["id"], "normal_emoji": app_info["emoji"]}
+        service_counts[detected_sid]["count"] += 1
 
-    if not country_counts:
-        return header + "\n🕐 <b>Window:</b> Last 15 minutes\n<i>No traffic data available right now.</i>", markup
-
-    sorted_countries = sorted(country_counts.items(), key=lambda item: item[1]["count"], reverse=True)[:6]
-    total_hits = sum(data["count"] for _, data in sorted_countries) or 1
-    top_code, top_data = sorted_countries[0]
+    sorted_services = sorted(service_counts.items(), key=lambda item: item[1]["count"], reverse=True)[:6]
+    total_hits = sum(data["count"] for _, data in sorted_services) or 1
+    top_sid, top_data = sorted_services[0]
 
     msg = (
         f"{header}\n"
         f"🕐 <b>Window:</b> Last 15 minutes\n"
-        f"📬 <b>Top:</b> {top_data['name']}\n\n"
-        f"🌐 <b>Top Countries:</b>\n"
+        f"📬 <b>Top:</b> <tg-emoji emoji-id=\"{top_data['emoji_id']}\">{top_data['normal_emoji']}</tg-emoji> {html.escape(str(top_sid))}\n\n"
+        f"🌐 <b>Top Services:</b>\n"
     )
     
     rank_numbers = ["1.", "2.", "3.", "4.", "5.", "6."]
-    for i, (c_code, data) in enumerate(sorted_countries):
+    for i, (sid, data) in enumerate(sorted_services):
         percent = round((data["count"] / total_hits) * 100)
-        msg += f"{rank_numbers[i]} {data['name']} — {percent}%\n"
+        msg += f"{rank_numbers[i]} <tg-emoji emoji-id=\"{data['emoji_id']}\">{data['normal_emoji']}</tg-emoji> {html.escape(str(sid))} — {percent}%\n"
     return msg, markup
 
 def get_services_content():
@@ -1266,35 +1125,20 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
                 for r in s.get('ranges', []):
                     clean_r = str(r).replace("X", "")
                     if c_code.startswith(clean_r) or clean_r.startswith(c_code):
-                        if r not in target_ranges:
-                            target_ranges.append(r)  # keep the full 'XXX'-style pattern Zebra SMS expects
+                        if clean_r not in target_ranges:
+                            target_ranges.append(clean_r)
                 break
         best_ranges = target_ranges[:3]
             
     if not best_ranges: 
-        best_ranges = [c_code + "XXX"]  # best-effort pattern guess in Zebra SMS's 'prefixXXX' range format
+        best_ranges = [c_code]
         
     req_count = bot_settings.get("num_req", 1)
     fetched_numbers = []
-    max_attempts_per_number = 5
     
     for _ in range(req_count):
-        num_data = None
-        tried_ranges = []
-        attempt = 0
-        
-        while num_data is None and attempt < max_attempts_per_number:
-            # Prefer a range we haven't tried yet this round, fall back to a random one once exhausted
-            untried = [r for r in best_ranges if r not in tried_ranges]
-            selected_rid = random.choice(untried) if untried else random.choice(best_ranges)
-            tried_ranges.append(selected_rid)
-            
-            num_data = fetch_live_number(selected_rid)
-            attempt += 1
-            
-            if num_data is None and attempt < max_attempts_per_number:
-                time.sleep(0.6)  # brief pause before silently retrying another range
-        
+        selected_rid = random.choice(best_ranges)
+        num_data = fetch_live_number(selected_rid)
         if num_data:
             full_number = html.escape(str(num_data.get("full_number", "")))
             country = html.escape(str(num_data.get("country", "Unknown")))
@@ -1362,7 +1206,6 @@ def handle_message(message):
     text = message.get("text", "")
     message_id = message["message_id"]
     first_name = message["from"].get("first_name", "User")
-    username = message["from"].get("username", "") or ""
 
     if text == "BACK" and user_id == ADMIN_ID:
         send_message(chat_id, "<b>Action Cancelled!</b>", reply_markup=get_main_keyboard(user_id)) 
@@ -1441,17 +1284,6 @@ def handle_message(message):
                 otp_button_link = text.strip()
                 save_local_data()
                 if target_msg_id: edit_message(chat_id, target_msg_id, "<b>OTP GROUP MANAGEMENT</b>\nManage settings below:", reply_markup=get_otp_group_keyboard())
-            else:
-                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid URL format. Must start with http/https.</b>", reply_markup=get_back_only_keyboard())
-            del user_states[user_id]
-            delete_message(chat_id, message_id)
-            return
-
-        elif state == "waiting_support_link":
-            if text.startswith("http"):
-                bot_settings["support_link"] = text.strip()
-                save_local_data()
-                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>SUPPORT ADMIN</b>\nSet the link users will see when they tap SUPPORT:", reply_markup=get_support_keyboard())
             else:
                 if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid URL format. Must start with http/https.</b>", reply_markup=get_back_only_keyboard())
             del user_states[user_id]
@@ -1692,38 +1524,26 @@ def handle_message(message):
             return
             
         elif state == "waiting_uc_id":
-            lookup_input = text.strip()
-            target_uid = None
-            target_data = None
-            
-            if lookup_input.startswith("@") or not lookup_input.lstrip("-").isdigit():
-                target_data = get_user_by_username(lookup_input)
-                if target_data: target_uid = target_data.get("user_id")
-            else:
-                try:
-                    target_uid = int(lookup_input)
-                    target_data = get_user(target_uid)
-                except ValueError:
-                    target_data = None
-            
-            if target_data and target_uid is not None:
-                safe_name = html.escape(str(target_data.get('first_name', 'User')))
-                target_username = target_data.get('username', '')
-                username_line = f"<b>Username:</b> @{html.escape(target_username)}\n" if target_username else ""
-                total_otps = target_data.get('total_otps', 0)
-                msg = (
-                    f"<b>USER PROFILE</b>\n"
-                    f"<b>Name:</b> {safe_name}\n"
-                    f"{username_line}"
-                    f"<b>ID:</b> <code>{target_uid}</code>\n"
-                    f"<b>Balance:</b> {target_data.get('balance', 0):.2f} BDT\n"
-                    f"<b>Total OTPs:</b> {total_otps}\n"
-                    f"<b>Total Invites:</b> {target_data.get('total_invites', 0)}\n"
-                )
-                if target_msg_id: edit_message(chat_id, target_msg_id, msg, reply_markup=get_user_profile_keyboard(target_uid))
-            else:
-                not_found_msg = "<b>User not found in database!</b>\n<i>Note: a username only works if that user has messaged the bot at least once.</i>" if (lookup_input.startswith("@") or not lookup_input.lstrip("-").isdigit()) else "<b>User not found in database!</b>"
-                if target_msg_id: edit_message(chat_id, target_msg_id, not_found_msg, reply_markup=get_user_control_keyboard())
+            try:
+                target_uid = int(text.strip())
+                target_data = get_user(target_uid)
+                
+                if target_data:
+                    safe_name = html.escape(str(target_data.get('first_name', 'User')))
+                    total_otps = target_data.get('total_otps', 0)
+                    msg = (
+                        f"<b>USER PROFILE</b>\n"
+                        f"<b>Name:</b> {safe_name}\n"
+                        f"<b>ID:</b> <code>{target_uid}</code>\n"
+                        f"<b>Balance:</b> {target_data.get('balance', 0):.2f} BDT\n"
+                        f"<b>Total OTPs:</b> {total_otps}\n"
+                        f"<b>Total Invites:</b> {target_data.get('total_invites', 0)}\n"
+                    )
+                    if target_msg_id: edit_message(chat_id, target_msg_id, msg, reply_markup=get_user_profile_keyboard(target_uid))
+                else:
+                    if target_msg_id: edit_message(chat_id, target_msg_id, "<b>User not found in database!</b>", reply_markup=get_user_control_keyboard())
+            except ValueError:
+                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid User ID format!</b>", reply_markup=get_user_control_keyboard())
             del user_states[user_id]
             delete_message(chat_id, message_id)
             return
@@ -1747,12 +1567,12 @@ def handle_message(message):
             delete_message(chat_id, message_id)
             return
 
-    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "🆘 SUPPORT", "👑 OWNER PANEL"]:
+    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "👑 OWNER PANEL"]:
         if user_id in user_states: del user_states[user_id]
 
     is_new_user = (get_user(user_id) is None)
 
-    add_user(user_id, first_name, username)
+    add_user(user_id, first_name)
     user_data = get_user(user_id)
 
     if text.startswith("/start"):
@@ -1837,14 +1657,6 @@ def handle_message(message):
         
     elif text == "🏆 LEADERBOARD":
         send_message(chat_id, get_leaderboard_text(), reply_markup=get_leaderboard_keyboard())
-
-    elif text == "🆘 SUPPORT":
-        support_link = bot_settings.get("support_link", "")
-        if support_link:
-            kb = {"inline_keyboard": [[{"text": "Contact Support", "icon_custom_emoji_id": "5429386648431405093", "url": support_link}]]}
-            send_message(chat_id, "<b>Need help?</b>\nTap below to contact support:", reply_markup=kb)
-        else:
-            send_message(chat_id, "<b>Support is not configured yet.</b>\nPlease try again later.")
 
     elif text == "👑 OWNER PANEL":
         if user_id == ADMIN_ID:
@@ -2037,13 +1849,6 @@ def handle_callback(callback_query):
         edit_message(chat_id, message_id, "<b>FORCE JOIN SYSTEM</b>\nManage channels below:", reply_markup=get_force_join_keyboard())
         answer_callback_query(query_id, "Channel Deleted!")
 
-    elif data == "manage_support":
-        edit_message(chat_id, message_id, "<b>SUPPORT ADMIN</b>\nSet the link users will see when they tap SUPPORT (e.g. your @username or a support group/channel link):", reply_markup=get_support_keyboard())
-        answer_callback_query(query_id)
-    elif data == "edit_support_link":
-        user_states[user_id] = {"state": "waiting_support_link", "msg_id": message_id}
-        edit_message(chat_id, message_id, "<b>Please send the new Support link.</b>\n<i>Examples: https://t.me/your_username or https://t.me/your_support_group</i>", reply_markup=get_back_only_keyboard())
-        answer_callback_query(query_id)
     elif data == "manage_otp_group":
         edit_message(chat_id, message_id, "<b>OTP GROUP MANAGEMENT</b>\nManage settings below:", reply_markup=get_otp_group_keyboard())
         answer_callback_query(query_id)
@@ -2141,7 +1946,7 @@ def handle_callback(callback_query):
         
     elif data == "uc_profile":
         user_states[user_id] = {"state": "waiting_uc_id", "msg_id": message_id}
-        edit_message(chat_id, message_id, "<b>Send the Telegram User ID or @username to view profile:</b>", reply_markup=get_back_only_keyboard())
+        edit_message(chat_id, message_id, "<b>Send the Telegram User ID to view profile:</b>", reply_markup=get_back_only_keyboard())
         answer_callback_query(query_id)
         
     elif data.startswith("uc_balance_"):
@@ -2176,6 +1981,7 @@ def main():
     set_bot_commands()
     
     threading.Thread(target=voltx_console_listener, daemon=True).start()
+    threading.Thread(target=voltx_sms_listener, daemon=True).start()
     threading.Thread(target=auto_cache_menu_thread, daemon=True).start()
     threading.Thread(target=run_health_check_server, daemon=True).start()
     
