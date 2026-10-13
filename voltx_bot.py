@@ -187,7 +187,8 @@ bot_settings = {
     "w_methods": ["bKash", "Nagad"],
     "otp_default_rate": 0.5,
     "otp_service_rates": {},
-    "main_channel_link": ""
+    "main_channel_link": "",
+    "support_admins": []
 }
 
 BOT_DATA_FILE = "bot_data.json"
@@ -1053,6 +1054,17 @@ def get_voltx_keys_keyboard():
     kb["inline_keyboard"].append([{"text": "Back", "callback_data": "back_to_admin", "icon_custom_emoji_id": "5438541186539232243"}])
     return kb
 
+def get_support_admin_keyboard():
+    kb = {"inline_keyboard": []}
+    admins = bot_settings.get("support_admins", [])
+
+    for idx, uname in enumerate(admins):
+        kb["inline_keyboard"].append([{"text": f"Delete: {uname}", "callback_data": f"del_support_{idx}", "icon_custom_emoji_id": "5438178416421544431"}])
+
+    kb["inline_keyboard"].append([{"text": "Add Support Admin", "callback_data": "add_support", "icon_custom_emoji_id": "5429501315468270290"}])
+    kb["inline_keyboard"].append([{"text": "Back", "callback_data": "back_to_admin", "icon_custom_emoji_id": "5438541186539232243"}])
+    return kb
+
 def get_main_keyboard(user_id):
     keyboard_layout = [
         [
@@ -1064,7 +1076,8 @@ def get_main_keyboard(user_id):
             {"text": "💳 WALLET", "icon_custom_emoji_id": "5429105001655999635"}
         ],
         [
-            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"}
+            {"text": "🏆 LEADERBOARD", "icon_custom_emoji_id": "5240021484516185513"},
+            {"text": "🆘 SUPPORT", "icon_custom_emoji_id": "5429274992166609833"}
         ]
     ]
     if user_id == ADMIN_ID:
@@ -1078,6 +1091,7 @@ def get_admin_inline_keyboard():
     return {
         "inline_keyboard": [
             [{"text": "VOLTX SETTINGS", "callback_data": "manage_voltx", "icon_custom_emoji_id": "5240122519326860770"}],
+            [{"text": "SUPPORT ADMIN", "callback_data": "manage_support", "icon_custom_emoji_id": "5429274992166609833"}],
             [
                 {"text": "BROADCAST", "callback_data": "broadcast_menu", "icon_custom_emoji_id": "5296633779157243809"},
                 {"text": "FORCE JOIN", "callback_data": "manage_fj", "icon_custom_emoji_id": "5429353834881261942"}
@@ -1446,6 +1460,18 @@ def handle_message(message):
             delete_message(chat_id, message_id)
             return
 
+        elif state == "waiting_support_admin":
+            uname = text.strip().lstrip("@").strip()
+            if uname:
+                bot_settings.setdefault("support_admins", []).append(f"@{uname}")
+                save_local_data()
+                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>SUPPORT ADMIN</b>\nManage support admin usernames below:", reply_markup=get_support_admin_keyboard())
+            else:
+                if target_msg_id: edit_message(chat_id, target_msg_id, "<b>Invalid username. Please send a valid Telegram username.</b>", reply_markup=get_back_only_keyboard())
+            del user_states[user_id]
+            delete_message(chat_id, message_id)
+            return
+
         elif state == "waiting_main_channel_link":
             if text.startswith("http"):
                 bot_settings["main_channel_link"] = text.strip()
@@ -1723,7 +1749,7 @@ def handle_message(message):
             delete_message(chat_id, message_id)
             return
 
-    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "👑 OWNER PANEL"]:
+    if text in ["📞 LIVE NUMBER", "📊 LIVE TRAFFIC", "🎁 INVITE FRIEND", "💳 WALLET", "🏆 LEADERBOARD", "🆘 SUPPORT", "👑 OWNER PANEL"]:
         if user_id in user_states: del user_states[user_id]
 
     is_new_user = (get_user(user_id) is None)
@@ -1813,6 +1839,22 @@ def handle_message(message):
         
     elif text == "🏆 LEADERBOARD":
         send_message(chat_id, get_leaderboard_text(), reply_markup=get_leaderboard_keyboard())
+
+    elif text == "🆘 SUPPORT":
+        admins = bot_settings.get("support_admins", [])
+        if admins:
+            support_txt = (
+                f"🆘 <b>NEED HELP?</b>\n"
+                f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                f"Contact one of our support admins below:"
+            )
+            kb = {"inline_keyboard": []}
+            for uname in admins:
+                clean_uname = uname.lstrip("@")
+                kb["inline_keyboard"].append([{"text": f"💬 {uname}", "icon_custom_emoji_id": "5429274992166609833", "url": f"https://t.me/{clean_uname}"}])
+            send_message(chat_id, support_txt, reply_markup=kb)
+        else:
+            send_message(chat_id, "🆘 <b>NEED HELP?</b>\nNo support admin has been set yet. Please contact the bot owner.")
 
     elif text == "👑 OWNER PANEL":
         if user_id == ADMIN_ID:
@@ -1984,6 +2026,22 @@ def handle_callback(callback_query):
                 answer_callback_query(query_id, "Key Deleted!")
             else:
                 answer_callback_query(query_id, "Cannot delete the only key!", show_alert=True)
+
+    if data == "manage_support":
+        edit_message(chat_id, message_id, "<b>SUPPORT ADMIN</b>\nManage support admin usernames below:", reply_markup=get_support_admin_keyboard())
+        answer_callback_query(query_id)
+    elif data == "add_support":
+        user_states[user_id] = {"state": "waiting_support_admin", "msg_id": message_id}
+        edit_message(chat_id, message_id, "<b>Please reply to this message with the support admin's Telegram username.</b>\n<i>(e.g. @YourSupportUsername)</i>", reply_markup=get_back_only_keyboard())
+        answer_callback_query(query_id)
+    elif data.startswith("del_support_"):
+        idx = int(data[12:])
+        admins = bot_settings.get("support_admins", [])
+        if idx < len(admins):
+            admins.pop(idx)
+            save_local_data()
+            edit_message(chat_id, message_id, "<b>SUPPORT ADMIN</b>\nManage support admin usernames below:", reply_markup=get_support_admin_keyboard())
+            answer_callback_query(query_id, "Support Admin Deleted!")
 
     elif data == "manage_fj":
         edit_message(chat_id, message_id, "<b>FORCE JOIN SYSTEM</b>\nManage channels below:", reply_markup=get_force_join_keyboard())
