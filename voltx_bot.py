@@ -91,7 +91,15 @@ def auto_cache_menu_thread():
             # a long time if one service/country dominates real traffic volume).
             services_data = fetch_live_access()
             if services_data:
-                service_sizes = [(s.get("sid") or "Unknown", s.get("ranges", []), len(s.get("ranges", []))) for s in services_data]
+                # Merge duplicate/casing variants of the same recognized brand (e.g. Zebra SMS
+                # lists both 'FACEBOOK' and 'Facebook' as separate senders) into one entry.
+                grouped_ranges = {}
+                for s in services_data:
+                    raw_sid = s.get("sid") or "Unknown"
+                    canon = canonical_sender_name(raw_sid)
+                    grouped_ranges.setdefault(canon, set()).update(s.get("ranges", []))
+
+                service_sizes = [(sid, list(ranges), len(ranges)) for sid, ranges in grouped_ranges.items()]
                 top_services = sorted(service_sizes, key=lambda x: x[2], reverse=True)[:15]
 
                 new_srv_kb = {"inline_keyboard": []}
@@ -528,6 +536,13 @@ def detect_service(message_text, raw_sid=""):
             return service
             
     return "Other"
+
+def canonical_sender_name(raw_sid):
+    """Collapses duplicate/casing variants of a recognized brand (e.g. 'FACEBOOK' and 'Facebook'
+    both from Zebra SMS) into one canonical name, while leaving unrecognized custom senders
+    (e.g. 'chaline.ru', 'MEXOTP') distinct under their own original name."""
+    detected = detect_service("", raw_sid)
+    return detected if detected != "Other" else (str(raw_sid or "").strip() or "Unknown")
 
 def get_service_info_html(service_name):
     app_info = PREMIUM_APPS.get(service_name, PREMIUM_APPS["Other"])
@@ -1243,14 +1258,16 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
         services_data = fetch_live_access()
         for s in services_data:
             sid_val = s.get('sid') or ""
-            if sid_val.lower().startswith(sid_short.lower()):
-                full_sid = sid_val
+            # Match against the canonical (merged) name so e.g. both 'FACEBOOK' and 'Facebook'
+            # senders contribute their ranges when the user picked the merged "Facebook" button --
+            # intentionally no 'break' here so ranges from ALL matching raw senders are collected.
+            if canonical_sender_name(sid_val).lower().startswith(sid_short.lower()) or sid_val.lower().startswith(sid_short.lower()):
+                full_sid = canonical_sender_name(sid_val)
                 for r in s.get('ranges', []):
                     clean_r = str(r).replace("X", "")
                     if c_code.startswith(clean_r) or clean_r.startswith(c_code):
                         if r not in target_ranges:
                             target_ranges.append(r)  # keep the full 'XXX'-style pattern Zebra SMS expects
-                break
         best_ranges = target_ranges[:3]
             
     if not best_ranges: 
