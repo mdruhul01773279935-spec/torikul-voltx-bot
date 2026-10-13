@@ -85,16 +85,22 @@ def auto_cache_menu_thread():
     global cached_services_kb, cached_countries_kb, voltx_auto_mode, voltx_dynamic_data
     while True:
         try:
-            if voltx_auto_mode and voltx_dynamic_data:
-                service_hits = [(sid, s_data, sum(r["hits"] for r in s_data["ranges"].values())) for sid, s_data in voltx_dynamic_data.items()]
-                top_services = sorted(service_hits, key=lambda x: x[2], reverse=True)[:15]
-                
+            # Build the "Select Service" / "Select Country" menus from the account's full live
+            # range coverage (/liveaccess) rather than only from self-learned voltx_dynamic_data
+            # (which only grows from actually-observed recent SMS and can stay narrow/stale for
+            # a long time if one service/country dominates real traffic volume).
+            services_data = fetch_live_access()
+            if services_data:
+                service_sizes = [(s.get("sid") or "Unknown", s.get("ranges", []), len(s.get("ranges", []))) for s in services_data]
+                top_services = sorted(service_sizes, key=lambda x: x[2], reverse=True)[:15]
+
                 new_srv_kb = {"inline_keyboard": []}
-                row = []; styles = ["primary", "success", "danger"]; style_idx = 0
-                for sid, data, hits in top_services:
+                row = []
+                for sid, ranges, size in top_services:
+                    detected_sid = detect_service("", sid)
+                    app_info = PREMIUM_APPS.get(detected_sid, PREMIUM_APPS["Other"])
                     safe_sid = html.escape(str(sid))
-                    row.append({"text": safe_sid, "callback_data": f"srv_{safe_sid[:15]}", "icon_custom_emoji_id": data["emoji_id"]})
-                    style_idx += 1
+                    row.append({"text": safe_sid, "callback_data": f"srv_{safe_sid[:15]}", "icon_custom_emoji_id": app_info["id"]})
                     if len(row) == 2: new_srv_kb["inline_keyboard"].append(row); row = []
                 if row: new_srv_kb["inline_keyboard"].append(row)
                 new_srv_kb["inline_keyboard"].append([{"text": "CLOSE", "callback_data": "close_panel", "icon_custom_emoji_id": "5438541186539232243"}])
@@ -102,22 +108,21 @@ def auto_cache_menu_thread():
                 cached_services_kb = new_srv_kb
 
                 new_cnt_kb = {}
-                for sid, data, hits in top_services:
+                for sid, ranges, size in top_services:
                     safe_sid_short = html.escape(str(sid))[:15]
                     country_map = {}
-                    for r, r_data in data["ranges"].items():
+                    for r in ranges:
                         clean_r = str(r).replace("X", "")
                         if not re.match(r'^\d+$', clean_r): continue
                         c_code, c_name = get_country_info(clean_r)
                         if c_code not in country_map: country_map[c_code] = {"name": c_name, "hits": 0}
-                        country_map[c_code]["hits"] += r_data["hits"]
+                        country_map[c_code]["hits"] += 1
                     
                     top_countries = sorted(country_map.items(), key=lambda x: x[1]["hits"], reverse=True)[:15]
                     
                     cnt_kb = {"inline_keyboard": []}
-                    styles_c = ["primary", "success", "danger"]; style_idx_c = 0
-                    std_service = detect_service("", sid)
-                    rate = get_otp_reward(std_service)
+                    detected_sid = detect_service("", sid)
+                    rate = get_otp_reward(detected_sid)
                     
                     for c_code, c_data in top_countries:
                         c_name_full = c_data["name"]
@@ -130,7 +135,6 @@ def auto_cache_menu_thread():
                         if emoji_char in GLOBAL_BODY_EMOJIS: btn["icon_custom_emoji_id"] = GLOBAL_BODY_EMOJIS[emoji_char]
                             
                         cnt_kb["inline_keyboard"].append([btn])
-                        style_idx_c += 1
                         
                     cnt_kb["inline_keyboard"].append([{"text": "BACK", "callback_data": "back_to_services", "icon_custom_emoji_id": "5438541186539232243"}])
                     new_cnt_kb[safe_sid_short] = cnt_kb
@@ -143,6 +147,7 @@ def auto_cache_menu_thread():
                 daily_user_otps["date"] = today
                 daily_user_otps["users"] = {}
                 
+
             top_users = sorted(daily_user_otps["users"].items(), key=lambda x: x[1], reverse=True)[:5]
             lb_msg = "<blockquote><tg-emoji emoji-id=\"5240021484516185513\">TOP</tg-emoji> <b>TOP 5 LEADERBOARD (TODAY)</b></blockquote>\n----------------\n"
             emoji_map = [("1", "5238176680098440792"), ("2", "5237806896299157399"), ("3", "5239965456667812809"), ("4", "5237911487342751418"), ("5", "5240278297790686165")]
@@ -558,9 +563,7 @@ def deliver_to_inbox(user_id, service_name, raw_number, msg_text, current_balanc
 
 def generate_otp_display(service_name, raw_number, message_text):
     c_code, c_name = get_country_info(raw_number)
-    
-    parts = c_name.split(" ", 1)
-    country_emoji = parts[0]
+    country_emoji = get_country_flag(c_code)
     
     if len(raw_number) > 6:
         masked_number = f"{raw_number[:3]}DXA{raw_number[-3:]}"
@@ -1220,6 +1223,7 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
     target_ranges = []
     full_sid = sid_short
     
+    best_ranges = []
     if voltx_auto_mode:
         for sid, data in voltx_dynamic_data.items():
             if sid.lower().startswith(sid_short.lower()):
@@ -1230,7 +1234,12 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
                 break
         target_ranges.sort(key=lambda x: x[1], reverse=True)
         best_ranges = [x[0] for x in target_ranges[:3]]
-    else:
+
+    # Fall back to (or, when auto-mode is off, always use) the account's live range list --
+    # self-learned data can stay thin/narrow for countries that just haven't had recent
+    # observed traffic yet, even though the account genuinely has access to them.
+    if not best_ranges:
+        target_ranges = []
         services_data = fetch_live_access()
         for s in services_data:
             sid_val = s.get('sid') or ""
@@ -1267,7 +1276,12 @@ def get_number_allocation_content(sid_short, c_code, user_id=None):
         save_local_data()
         
         service_html, srv_eid = get_service_info_html(full_sid)
-        _, country_with_flag = get_country_info(c_code)
+        _, c_name_full = get_country_info(c_code)
+        if "Other" in c_name_full:
+            country_with_flag = f"🌐 {c_name_full}"
+        else:
+            cname_parts = c_name_full.split(" ", 1)
+            country_with_flag = f"{get_country_flag(c_code)} {cname_parts[1] if len(cname_parts) > 1 else c_name_full}"
         
         msg = (
             f"<b>ACTIVE NUMBER 15M</b>\n"
